@@ -9,3 +9,5 @@
 #   generate-hashes: false
 
 -e file:.
+pip==24.0
+    # via rdepot-pip
