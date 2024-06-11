@@ -1,0 +1,28 @@
+[project]
+name = "rdepot-pip"
+version = "0.1.0"
+description = "Client to install python packages from an rdepot index. Ensuring the users is correctly authenticated."
+authors = [
+    { name = "lennart tuijnder", email = "lennart.tuijnder@openanalytics.eu" }
+]
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.8"
+classifiers = ["Private :: Do Not Upload"]
+
+[project.scripts]
+"rdepot-pip" = "rdepot_pip:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rdepot_pip"]
