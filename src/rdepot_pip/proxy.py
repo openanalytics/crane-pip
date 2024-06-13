@@ -9,6 +9,8 @@ from typing import NamedTuple, Tuple, Dict, Union
 import urllib3
 import logging 
 
+from .auth import Auth
+
 logger = logging.getLogger(__name__)
 
 class ProxyError(Exception):
@@ -49,17 +51,19 @@ class RDepotProxy:
         # TODO Read config to get order of rdepot urls
         if not rdepot_url:
             try: 
-                rdepot_url = os.environ['RDEPOT_URL'].strip()
+                rdepot_url = os.environ['RDEPOT_INDEX_URL'].strip()
             except Exception:
                 pass
 
         # TODO authenticate for the provided rdepot_urls
-        token = ""
+        auth = Auth()
+        auth.authenticate()
+        token = auth.get_access_token()
     
         # Indexes which the proxy server will forward requests to.
         # TODO determine if this is public knowledge or not?
         self._indexes: Tuple[Index] = (
-            #Index(url = rdepot_url, token = token),
+            Index(url = rdepot_url, token = token),
             Index(url="https://pypi.python.org/simple"), # PyPI fallback
         )
  
