@@ -16,8 +16,6 @@ Either specify directly via `-i` or `--index-url` flag which rdepot url to use o
 
 If not rdepot url is specified, it will default back to PyPI.
 
-TODO: determine how to support more fall back urls.
-
 ## Usage 
 
 ```
@@ -40,3 +38,6 @@ You will get promted to authenticated yourself.
 
 Point your 3rd party tool to exclusive use the local adress as the index to use. This index will redirect requestes to the index you have configured.
 
+## TODO 
+
+Determine how to configure the different rdepot indexes togheter with the corresponding discovery urls needed for authentication!
