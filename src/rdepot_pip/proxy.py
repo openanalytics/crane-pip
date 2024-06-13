@@ -1,5 +1,6 @@
 from enum import Enum
 import sys
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from threading import Thread
@@ -46,7 +47,11 @@ class RDepotProxy:
         self.is_running:bool = False
 
         # TODO Read config to get order of rdepot urls
-        rdepot_url = rdepot_url
+        if not rdepot_url:
+            try: 
+                rdepot_url = os.environ['RDEPOT_URL'].strip()
+            except Exception:
+                pass
 
         # TODO authenticate for the provided rdepot_urls
         token = ""

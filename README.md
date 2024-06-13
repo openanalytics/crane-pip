@@ -10,16 +10,18 @@ Install the `rdepot-pip` in its own environment on your system using [pipx](http
 pipx install rdepot-pip
 ```
 
-## Configuration
+## Index configuration
 
-Configure which rdepot index to use. 
+Either specify directly via `-i` or `--index-url` flag which rdepot url to use or specify it with the `RDEPOT_URL` environment.
 
-TODO determine still how to configure the to which index to communicate!
+If not rdepot url is specified, it will default back to PyPI.
+
+TODO: determine how to support more fall back urls.
 
 ## Usage 
 
 ```
-rdepot-pip install pkg
+rdepot-pip install --index-url rdepot.example.url pkg
 ```
 
 You will get promted to authenticated yourself against the rdepot index in the browser. 
