@@ -9,5 +9,5 @@
 #   generate-hashes: false
 
 -e file:.
-pip==24.0
+urllib3==2.2.1
     # via rdepot-pip
