@@ -38,7 +38,7 @@ class RDepotProxy:
     The proxy can be started/stopped using the start/stopped and can be checked if running via 
     the is_running property. The life time of the proxy can also be managed via a context manager.
     """
-    def __init__(self) -> None:
+    def __init__(self, rdepot_url = Union[str, None]) -> None:
         self._proxy : ThreadedHTTPServer
         self._proxy_thread : Thread
 
@@ -46,7 +46,7 @@ class RDepotProxy:
         self.is_running:bool = False
 
         # TODO Read config to get order of rdepot urls
-        rdepot_url = ""
+        rdepot_url = rdepot_url
 
         # TODO authenticate for the provided rdepot_urls
         token = ""
