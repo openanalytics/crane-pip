@@ -1,7 +1,7 @@
 [project]
-name = "rdepot-pip"
+name = "crane-pip"
 version = "0.1.0"
-description = "Client to install python packages from an rdepot index. User authentication occurs via OAuth2."
+description = "cli to download python package from an index (like rdepot) behind a crane server."
 authors = [
     { name = "Lennart Tuijnder", email = "lennart.tuijnder@openanalytics.eu" },
     { name = "Tobia De Koninck", email = "tobia.dekoninck@openanalytics.eu" }
@@ -12,7 +12,7 @@ requires-python = ">= 3.8"
 classifiers = ["Private :: Do Not Upload"]
 
 [project.scripts]
-"rdepot-pip" = "rdepot_pip:main"
+"crane" = "crane:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -26,10 +26,10 @@ dev-dependencies = [
 ]
 
 [tool.rye.scripts]
-r = "rdepot-pip --timeout 600"
+c = "crane-pip --timeout 600"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/rdepot_pip"]
+packages = ["src/crane_pip"]
