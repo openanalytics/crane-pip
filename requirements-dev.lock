@@ -47,6 +47,6 @@ traitlets==5.14.3
 typing-extensions==4.12.2
     # via ipython
 urllib3==2.2.1
-    # via rdepot-pip
+    # via crane-pip
 wcwidth==0.2.13
     # via prompt-toolkit

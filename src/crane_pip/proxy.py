@@ -1,6 +1,5 @@
 from enum import Enum
 import sys
-import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from threading import Thread
@@ -76,8 +75,7 @@ class IndexProxy:
 
         # TODO authenticate for the provided index_urls
         auth = Auth()
-        auth.authenticate()
-        token = auth.get_access_token()
+        token = auth.authenticate()
 
         # Indexes which the proxy server will forward requests to.
         # TODO determine if this is public knowledge or not?

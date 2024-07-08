@@ -10,4 +10,4 @@
 
 -e file:.
 urllib3==2.2.1
-    # via rdepot-pip
+    # via crane-pip

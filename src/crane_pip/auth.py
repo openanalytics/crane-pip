@@ -1,161 +1,285 @@
-# TODO refactor this whole page
-
-import datetime
-import json
+# Second attempt
+from datetime import datetime
 import os
-import sys
+import json
 import time
 from pathlib import Path
-from pprint import pprint
-from typing import Literal
+from typing import Dict, TypedDict, Union
 
 import urllib3
 
 
+###### Crane config:
+
+CONFIG_DIR = os.path.join(Path.home(), ".local", "share", "crane", "python")
+os.makedirs(CONFIG_DIR, exists_ok=True)
+
+CONFIG_FILE = os.path.join(CONFIG_DIR, "index_config.json")
+
+
+class CraneIndexConfig(TypedDict):
+    "Crane configuration for a single index."
+
+    client_id: str
+    token_url: str
+    device_code_url: str
+
+
+class CraneConfig:
+    "Crane configuration for all the indexes"
+
+    def __init__(self) -> None:
+        # Key = index urls
+        self._config: Dict[str, CraneIndexConfig]
+        with open(CONFIG_FILE, "r") as f:
+            self._config = json.load(f)
+
+    def get_config(self, index_url: str) -> Union[CraneIndexConfig, None]:
+        "Get the config for a given index url. None in case the url is not registerd."
+        return self._config.get(key=index_url, default=None)
+
+    def set_config(self, index_url: str, config: CraneIndexConfig):
+        self._config[index_url] = config
+        self._write_config()
+
+    def _write_config(self):
+        "Save current state of the config to disk"
+        with open(CONFIG_FILE, "w") as f:
+            f.write(json.dumps(self._config))
+
+###### Cache
+
+
+class ExpiredTokens(Exception):
+    "Error raised when expired tokens were attempted to get used."
+
+    pass
+
+
+class RequestError(Exception):
+    "General request error"
+
+    pass
+
+
+class FailedRefreshRequest(RequestError):
+    "Request to refresh tokens failed"
+
+    pass
+
+
+CACHE_DIR = os.path.join(Path.home(), ".cache", "crane", "python")
+os.makedirs(CACHE_DIR, exists_ok=True)
+
+TOKEN_CACHE_FILE = os.path.join(CACHE_DIR, "tokens.json")
+
+
+class Tokens:
+    "Token configs for a given index url"
+
+    def __init__(
+        self,
+        access_token: str,
+        access_token_exp_time: str,
+        refresh_token: str,
+        refresh_token_exp_time: str,
+    ) -> None:
+        pass
+        self.access_token = access_token
+        self.access_token_exp_time = datetime.datetime.fromtimestamp(
+            access_token_exp_time
+        )
+        self.refresh_token = refresh_token
+        self.refresh_token_exp_time = datetime.datetime.fromtimestamp(
+            refresh_token_exp_time
+        )
+
+    def serialize_token_cache(self) -> Dict[str, str]:
+        "Return dictionary to be stored in the json cache file"
+        to_cache = {
+            "access_token": self.access_token,
+            "access_token_exp_time": self.access_token_exp_time.timestamp(),
+            "refresh_token": self.refresh_token,
+            "refresh_token_exp_time": self.refresh_token_exp_time.timestamp(),
+        }
+        return to_cache
+
+    def access_token_expired(self):
+        return self.access_token_exp_time < datetime.now()
+
+    def refresh_token_expired(self):
+        return self.refresh_token_exp_time < datetime.now()
+
+    def expired_but_can_refresh(self):
+        return self.access_token_exp_time() and not self.refresh_token_exp_time()
+
+    def refresh_if_necessary(self, index_config: CraneIndexConfig):
+        """Refresh tokens if necessary.
+
+        That is, the access_token is expired but the refresh token is not.
+
+        If the refresh token is also expired then an ExpiredTokens exeption is raised"""
+        if self.expired_but_can_refresh():
+            self.refresh(index_config=index_config)
+        if self.refresh_token_expired():
+            raise ExpiredTokens
+
+    def refresh(self, index_config: CraneIndexConfig):
+        """Refresh using refresh_token and the index config.
+
+        An ExpiredTokens error is raised incase the refresh tokens was already expired."""
+
+        if self.refresh_token_expired():
+            raise ExpiredTokens
+
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": self.refresh_token,
+            "client_id": index_config["client_id"]
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        response = urllib3.request(
+            method="POST",
+            url=index_config["token_url"],
+            headers=headers,
+            body=json.dumps(payload),
+        )
+        content = response.json()
+        if response.status >= 400 or (not content) or not isinstance(content, dict):
+            raise FailedRefreshRequest
+
+        now = datetime.datetime.now()
+        self.access_token = content["access_token"]
+        self.refresh_token = content["refresh_token"]
+        self.access_token_exp_time = now + datetime.timedelta(
+            seconds=content["expires_in"]
+        )
+        self.refresh_token_exp_time = now + datetime.timedelta(
+            seconds=content["refresh_expires_in"]
+        )
+
+
+class Cache:
+    def __init__(self) -> None:
+        # Key = index url
+        self._cache: Dict[str, Tokens]
+        with open(TOKEN_CACHE_FILE, "r") as f:
+            self._cache = {url: Tokens(**tokens) for url, tokens in json.load(f)}
+
+    def get_cached_token(self, index_url: str) -> Union[Tokens, None]:
+        return self._cache.get(key=index_url, default=None)
+
+    def set_cached_token(self, index_url: str, tokens: Tokens):
+        self._cache[index_url] = Tokens
+        self.write_cache()
+
+    def write_cache(self):
+        "Write current cache state back to disk"
+        to_write = {
+            url: tokens.serialize_token_cache() for url, tokens in self._cache.items()
+        }
+        with open(TOKEN_CACHE_FILE, "w") as f:
+            f.write(json.dumps(to_write))
+
+###### Authentication 
+
+class FailedDeviceCodeRequest(RequestError):
+    "Request for fetching device code failed"
+    
+    pass
+
+class AuthorizationPendingFailed(RequestError):
+    "An error occured when polling for the status."
+
+        
+def _perform_device_auth_flow(config: CraneIndexConfig) -> Tokens:
+    """Perform device authentication for a given index config and return the tokens
+
+    This is a blocking call that will only exist once the authentication by the user is performed.
+    """
+
+class UnregisterdIndex(Exception):
+    
+    pass
+
+
 class Auth:
-    """Class implementing the device login flow of OAuth.
-    Used for authenticating against a crane"""
+    "Authentication class for a given index_url"
 
-    # TODO have _init by configured based on the index configured
-    def __init__(self, index_url: str):
-        "Index url to authenticate against"
-        # TODO read client_id from cached directory
-        self.client_id = "pip"
+    # Global config/cache for all configured indexes.
+    config = CraneConfig()
+    cache = Cache()
 
-        # TODO update with https://github.com/platformdirs/platformdirs to be platfrom independed.
-        self.dirname = os.path.join(Path.home(), ".cache", "crane-pip")
-        os.makedirs(self.dirname, exist_ok=True)
+    def __init__(self, index_url: str) -> None:
+        
+        self.index_config = self.config.get_config(index_url)
+        if not self.index_config:
+            raise UnregisterdIndex(
+                f"The index_url: {index_url} is not registed crane protected index."
+            )
+        self.tokens: Union[Tokens, None] = self.cache.get_cached_token(index_url)
 
-        # TODO specify how the user should configure these urls or how discover them from a given openid-configuration url.
-        # TODO replace this with cache look up.
-        self.device_code_url = os.environ["CRANE_DEVICE_URL"].strip()
-        self.token_url = os.environ["CRANE_TOKEN_URL"].strip()
-
-        # TODO use the same.
-        self.filename = os.path.join(self.dirname, "auth_crane.json")
-
-        self._current_request_device_code = None
-        self._current_request_interval = 5
-
-        # tokens
-        self._current_refresh_token: str
-        self._current_refresh_token_not_after: datetime.datetime
-        self._current_access_token: str
-        self._current_access_token_not_after: datetime.datetime
-
-    def authenticate(self) -> Literal[True]:
-        """Perform the authentication flow
-
-        1. Check for cached token.
-        2. If no cache found -> Perform device code request which requires user interaction.
+    def authenticate(self) -> str:
+        """Perform authentication flow (if necessary) and return the access_token.
+        
+        Authentication flow is only necessary when: no access_token was found, or was expired and 
+        could also not get refreshed.
         """
 
-        # TODO crash with proper Exception errors and just prints.
-        if self._read_cache():
-            # loaded tokens form cache
-            return True
+        # Check if there is a cache to begin with.
+        if self.tokens:
+            try:
+                return self.get_access_token()
+            except ExpiredTokens:
+                pass
 
-        if not self._device_code_request():
-            print("Device code request failed")
-            sys.exit(1)
+        self._perform_device_auth_flow()
+        self.cache.set_cached_token(self.tokens)
 
-        if not self._start_polling():
-            print("Polling request failed")
-            sys.exit(1)
-
-        self._cache_tokens()
-        return True
 
     def get_access_token(self) -> str:
-        "Fetch the access token to use in authentication with the crane server."
-        self._refresh_access_token_if_required()
-        return self._current_access_token
+        """Get access_token from cache or refresh token if possible.
 
-    def _refresh_access_token_if_required(self) -> None:
-        """Refresh the access token if expired.
-        An Exception is raised if the refresh token is also already expired."""
-
-        # TODO add check if the refresh token is also not expired!
-        if self._current_access_token_not_after < datetime.datetime.now():
-            self._refresh_access_token()
-            self._cache_tokens()
-
-    def _read_cache(self) -> bool:
-        """Attempt to fetch tokens from cache.
-
-        If succeeded, TRUE is returned and `get_access_token()` can get used to fetch the token.
-        If did not succeed the user will need to perform the device code login flow.
-
-        Incase the access_token is invalid but the refresh token is still valid. Then tokens are
-        automatically refreshed.
+        An ExpiredToken exeption is raised if both the access and refresh token are expired.
         """
-        if not os.path.exists(self.filename):
-            return False
-        with open(self.filename, "r") as fh:
-            cache = json.load(fh)
-            if "refresh_token" not in cache or "refresh_token_not_after" not in cache:
-                return False
-            # check refresh token still valid for at least 5 minutes
-            not_after = datetime.datetime.now() + datetime.timedelta(minutes=5)
-            refresh_token_not_after = datetime.datetime.fromtimestamp(
-                cache["refresh_token_not_after"]
-            )
-            if refresh_token_not_after < not_after:
-                return False
+        if not self.tokens.access_token_expired():
+            return self.tokens.access_token 
+        if self.tokens.expired_but_can_refresh():
+            self.tokens.refresh(index_config=self.index_config)
+            self.cache.write_cache()
+            return self.tokens.access_token 
+        raise ExpiredTokens
 
-            self._current_refresh_token = cache["refresh_token"]
-            self._current_refresh_token_not_after = datetime.datetime.fromtimestamp(
-                cache["refresh_token_not_after"]
-            )
+    def _perfom_device_auth_flow(self):
+        """Perform device authentication flow.
 
-            # check access token still valid
-            if "access_token" in cache and "access_token_not_after" in cache:
-                access_token_not_after = datetime.datetime.fromtimestamp(
-                    cache["access_token_not_after"]
-                )
-                if access_token_not_after > datetime.datetime.now():
-                    self._current_access_token = cache["access_token"]
-                    self._current_access_token_not_after = access_token_not_after
-
-                    # TODO have this be formally with logging
-                    print("You are now authenticated.")
-                    return True
-
-            # If refresh token did not expire yet. But the access token did. Then refresh tokens.
-            if not self._refresh_access_token():
-                return False
-            self._cache_tokens()
-            return True
-
-    def _device_code_request(self) -> bool:
-        """Initiate a device code login fow.
-
-        On success true is returned and the user will now need to perform
-        authentication on the device.
-
-        Start checking if the user has logged-id via _start_polling.
+        This is a blocking call that will only exist once the 
+        authentication by the user is performed in the browser.
         """
-        payload = {"client_id": self.client_id, "scope": "openid offline_access"}
+        ## Part 1: request the device login.
+        payload = {"client_id": self.config["client_id"], "scope": "openid offline_access"}
 
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
         response = urllib3.request(
             method="POST",
-            url=self.device_code_url,
+            url=self.config["device_code_url"],
             headers=headers,
             body=json.dumps(payload),
         )
         content = response.json()
+        if response.status >= 400 or (not content) or not isinstance(content, dict):
+            raise FailedDeviceCodeRequest
 
-        if content is None or "error" in content:
-            # TODO make proper error here
-            print(content)
-            return False
-
-        self._current_request_device_code = content["device_code"]
+        device_code = content["device_code"]
         if "interval" in content:
-            self._current_request_interval = content["interval"]
+            request_interval = content["interval"]
+        else:
+            request_interval = 2
 
+
+        ## Part 2: Call for user actions
         print("------------------------------")
         print("Please authenticate:")
         print(f"\tpoint your browser to: {content['verification_uri']}")
@@ -163,111 +287,49 @@ class Auth:
         if "verification_uri_complete" in content:
             print(f"\tor use the direct link: {content['verification_uri_complete']}")
         print("------------------------------" "")
-        return True
 
-    def _start_polling(self) -> bool:
-        """Blocking call that waits until the user performed the login.
 
-        On success, True is returned and the tokens are acquired and stored in the object.
-        The tokens still need to be stored in the cache, if desired, by calling the _cache_tokens
-        """
+        ## Part 3: Start polling:
         print("Waiting for authentication.", sep="", end="", flush=True)
         while True:
-            time.sleep(self._current_request_interval)
+            time.sleep(request_interval)
             print(".", sep="", end="", flush=True)
 
             payload = {
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                "device_code": self._current_request_device_code,
-                "client_id": self.client_id,
+                "device_code": device_code,
+                "client_id": self.config["client_id"]
             }
 
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
             response = urllib3.request(
                 method="POST",
-                url=self.device_code_url,
+                url=self.config["device_code_url"],
                 headers=headers,
                 body=json.dumps(payload),
             )
             content = response.json()
-
             if content is None:
-                # TODO make into exception
-                pprint(response)
-                return False
+                print(response)
+                raise AuthorizationPendingFailed
 
             if "error" in content:
                 if content["error"] == "authorization_pending":
                     continue
                 else:
-                    pprint(content)
-                    return False
+                    print(content)
+                    raise AuthorizationPendingFailed
 
             now = datetime.datetime.now()
 
-            self._current_access_token = content["access_token"]
-            self._current_refresh_token = content["refresh_token"]
-            self._current_access_token_not_after = now + datetime.timedelta(
-                seconds=content["expires_in"]
+            self.tokens = Tokens(
+                access_token = content["access_token"],
+                refresh_token = content["refresh_token"],
+                access_token_exp_time = now + datetime.timedelta(
+                    seconds=content["expires_in"]
+                ),
+                refresh_token_exp_time = now + datetime.timedelta(
+                    seconds=content["refresh_expires_in"]
+                )
             )
-            self._current_refresh_token_not_after = now + datetime.timedelta(
-                seconds=content["refresh_expires_in"]
-            )
-
-            print()
-            print("You are now authenticated.")
-            return True
-
-    def _refresh_access_token(self) -> bool:
-        """Refresh the access and refresh token and store in cache. Return True on success.
-
-        Note, tokens are not cached yet. They are simply stored in the object. Call _cache_tokens
-        to cache.
-        """
-        payload = {
-            "grant_type": "refresh_token",
-            "refresh_token": self._current_refresh_token,
-            "client_id": self.client_id,
-        }
-
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        response = urllib3.request(
-            method="POST",
-            url=self.device_code_url,
-            headers=headers,
-            body=json.dumps(payload),
-        )
-        content = response.json()
-        if content is None or "error" in content:
-            return False
-
-        now = datetime.datetime.now()
-
-        self._current_access_token = content["access_token"]
-        self._current_refresh_token = content["refresh_token"]
-        self._current_access_token_not_after = now + datetime.timedelta(
-            seconds=content["expires_in"]
-        )
-        self._current_refresh_token_not_after = now + datetime.timedelta(
-            seconds=content["refresh_expires_in"]
-        )
-
-        print("You are now authenticated.")
-        return True
-
-    def _cache_tokens(self) -> None:
-        "Cache the currently stored tokens"
-
-        # TODO add check if tokens are loaded in the first place.
-        cache = {
-            "refresh_token": self._current_refresh_token,
-            "refresh_token_not_after": self._current_refresh_token_not_after.timestamp(),
-            "access_token": self._current_access_token,
-            "access_token_not_after": self._current_access_token_not_after.timestamp(),
-        }
-        with open(self.filename, "w") as fh:
-            fh.write(json.dumps(cache))
-        os.chmod(self.dirname, 0o700)
-        os.chmod(self.filename, 0o600)
