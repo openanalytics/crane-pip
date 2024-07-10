@@ -23,10 +23,14 @@ managed = true
 dev-dependencies = [
     'pip',
     "ipython>=8.12.3",
+    "pytest>=8.2.2",
 ]
 
 [tool.rye.scripts]
 c = "crane-pip --timeout 600"
+
+[tool.ruff]
+line-length = 100
 
 [tool.hatch.metadata]
 allow-direct-references = true

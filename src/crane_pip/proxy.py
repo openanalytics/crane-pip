@@ -90,9 +90,7 @@ class IndexProxy:
     def start(self) -> None:
         "Start up the proxy an seperate thread."
         if not self.is_running:
-            self._proxy = ThreadedHTTPServer(
-                self.proxy_address, ProxyHTTPRequestHandler
-            )
+            self._proxy = ThreadedHTTPServer(self.proxy_address, ProxyHTTPRequestHandler)
             print(f"Starting proxy on {self.proxy_address.url()}")
             self._proxy_thread = Thread(target=self._proxy.serve_forever)
             self._proxy_thread.start()
