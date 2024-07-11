@@ -76,3 +76,7 @@ class TokenCache(UserDict[str, CraneTokens]):
             f.write(json.dumps(to_write))
 
 token_cache = TokenCache()
+
+# Other modules should interact with the cache via the above object.
+# Else multiple in-memory states will get out of sync.
+del TokenCache

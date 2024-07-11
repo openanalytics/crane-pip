@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 import json
 import time
-from .config import CraneServerConfig, crane_configs
+from .config import ServerConfig, server_configs
 from .cache import CraneTokens, token_cache
 
 import urllib3
@@ -13,8 +13,8 @@ class ExpiredTokens(Exception):
 
     pass
 
-class UnregisterdIndex(Exception):
-    "Error raised when index config information is required but not present"
+class UnregisterdServer(Exception):
+    "Error raised when the config of unregistered crane server is requested but not present"
 
     pass
 
@@ -48,7 +48,7 @@ class AuthorizationPendingFailed(RequestError):
     pass
 
 
-def refresh(tokens: CraneTokens, index_config: CraneServerConfig) -> CraneTokens:
+def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
     """Fetch new tokens using the refresh token and return a **new copy** of tokens.
 
     An ExpiredTokens error is raised incase the refresh tokens was already expired."""
@@ -59,13 +59,13 @@ def refresh(tokens: CraneTokens, index_config: CraneServerConfig) -> CraneTokens
     payload = {
         "grant_type": "refresh_token",
         "refresh_token": tokens.refresh_token,
-        "client_id": index_config.client_id,
+        "client_id": crane_config.client_id,
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     response = urllib3.request(
         method="POST",
-        url=index_config.token_url,
+        url=crane_config.token_url,
         headers=headers,
         body=json.dumps(payload),
     )
@@ -82,27 +82,27 @@ def refresh(tokens: CraneTokens, index_config: CraneServerConfig) -> CraneTokens
     )
     return new_tokens
 
-def perform_device_auth_flow(index_url: str) -> CraneTokens:
-    """Perform device authentication for a given index config and return the acquired tokens.
+def perform_device_auth_flow(crane_url: str) -> CraneTokens:
+    """Perform device authentication for a given crane server and return the acquired tokens.
 
     The calling is blocking until the user has performed the authentication in a browser.
     """
 
-    index_config = crane_configs.get(index_url)
-    if not index_config:
-        raise UnregisterdIndex(
-            "Cannot perform device authentication flow for unregisted index {index_url}. "
-            "Use the `register-index` command to register the index."
+    crane_config = server_configs.get(crane_url)
+    if not crane_config:
+        raise UnregisterdServer(
+            "Cannot perform device authentication flow for unregisted url {crane_url}. "
+            "Use the `register` command to register the crane server."
         )
 
     ## Part 1: request the device login.
-    payload = {"client_id": index_config.client_id, "scope": "openid offline_access"}
+    payload = {"client_id": crane_config.client_id, "scope": "openid offline_access"}
 
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     response = urllib3.request(
         method="POST",
-        url=index_config.device_code_url,
+        url=crane_config.device_code_url,
         headers=headers,
         body=json.dumps(payload),
     )
@@ -134,14 +134,14 @@ def perform_device_auth_flow(index_url: str) -> CraneTokens:
         payload = {
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             "device_code": device_code,
-            "client_id": index_config.client_id,
+            "client_id": crane_config.client_id,
         }
 
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
         response = urllib3.request(
             method="POST",
-            url=index_config.device_code_url,
+            url=crane_config.device_code_url,
             headers=headers,
             body=json.dumps(payload),
         )
@@ -168,51 +168,50 @@ def perform_device_auth_flow(index_url: str) -> CraneTokens:
         )
 
 
-def get_access_token(index_url: str) -> str:
+def get_access_token(crane_url: str) -> str:
     """Get access_token from cache or if possible request new ones using the cached refesh tokens.
 
     Exceptions:
     -----------
     NoTokenCache:
-        In case no tokens were cached for the index url, which this function assumes to be 
-        present.
+        In case no tokens were cached for the url, which this function assumes to be present.
     ExpiredTokens:
         Tokens are present but both access and refresh token are already epxired.
-    UnregisterdIndex:
-        Incase there are no configurations found for the index url which are needed if we want 
+    UnregisterdServer:
+        Incase there are no configurations found for the url which are needed if we want 
         to request new tokens using the refresh token.
     """
-    tokens = token_cache[index_url]
-    index_config = crane_configs[index_url]
+    tokens = token_cache[crane_url]
+    crane_config = server_configs[crane_url]
 
-    if not crane_configs:
-        raise UnregisterdIndex("Index url = {index_url} is not registed. "
-            "Please registed the index first using the 'regerist-index' command.")
+    if not server_configs:
+        raise UnregisterdServer("url = {crane_url} is not registed. "
+            "Please registed the crane server 'register' command.")
 
     if not tokens:
         raise NoTokenCache(
-            f"No authentication tokens are cached for {index_url}."
+            f"No authentication tokens are cached for {crane_url}."
             " Please authenticate first using the authenticate function."
         )
 
     if not tokens.access_token_expired():
         return tokens.access_token
     if tokens.expired_but_can_refresh():
-        new_tokens = refresh(tokens, index_config)
-        token_cache[index_url] = refresh(tokens, index_config)
+        new_tokens = refresh(tokens, crane_config)
+        token_cache[crane_url] = refresh(tokens, crane_config)
         return new_tokens.access_token
     raise ExpiredTokens
 
-def authenticate(index_url: str) -> str:
+def authenticate(crane_url: str) -> str:
     """Authenticate with the device flow if necessary and return the access token.
 
     Preferable the token is first checked if present in the cache or if it can get refreshed.
     """
 
-    token = token_cache.get(index_url)
+    token = token_cache.get(crane_url)
     if not token or token.is_expired():
-        new_tokens = perform_device_auth_flow(index_url)
-        token_cache[index_url] = new_tokens
+        new_tokens = perform_device_auth_flow(crane_url)
+        token_cache[crane_url] = new_tokens
         return new_tokens.access_token
 
-    return get_access_token(index_url)
+    return get_access_token(crane_url)
