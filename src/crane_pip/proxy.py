@@ -8,25 +8,21 @@ from typing import NamedTuple, Tuple, Dict, Union
 import urllib3
 import logging
 
-from .auth import Auth
+from .auth import authenticate
 
 logger = logging.getLogger(__name__)
 
 
 class ProxyError(Exception):
-    "General proxy error"
-
     pass
 
 
 class ProxyControlError(ProxyError):
-    "Error during the lifetime managment of the proxy."
-
     pass
 
 
 class ProxyAddress(NamedTuple):
-    "Address of the proxy"
+    "Address of the proxy."
 
     host: str
     port: int
@@ -39,11 +35,17 @@ class IndexConfig(NamedTuple):
     "Index configuration."
 
     url: str
-    auth_token: Union[str, None] = None
+    access_token: Union[str, None] = None
 
 
 class IndexProxy:
     """A proxy acting as an index that adds the required auth headers for a crane protected index.
+
+    Arguments:
+    ----------
+    index_url: str | None
+        Either the url of a registed crane protected index. Or None in which case requested will 
+        simply be forwarded to PyPI.
 
     Configuration:
     --------------
@@ -66,26 +68,28 @@ class IndexProxy:
     a context manager.
     """
 
-    def __init__(self, index_url=str) -> None:
+    def __init__(self, index_url: Union[str, None]) -> None:
         self._proxy: ThreadedHTTPServer
         self._proxy_thread: Thread
 
         self.proxy_address = ProxyAddress(host="127.0.0.1", port=9999)
         self.is_running: bool = False
+        
+        
+        # Determine the which indexes the proxy server should forward request to.
+        pypi_config = IndexConfig(url="https://pypi.python.org/simple")
+        if index_url:
+            indx_config = IndexConfig(
+                url=index_url,
+                access_token=authenticate(crane_url=index_url)
+            )
+            indexes = (indx_config, pypi_config)
+        else:
+            indexes = (pypi_config,)
 
-        # TODO authenticate for the provided index_urls
-        auth = Auth()
-        token = auth.authenticate()
-
-        # Indexes which the proxy server will forward requests to.
-        # TODO determine if this is public knowledge or not?
-        self._indexes: Tuple[IndexConfig] = (
-            IndexConfig(url=index_url, auth_token=token),
-            IndexConfig(url="https://pypi.python.org/simple"),  # PyPI fallback
-        )
-
+        self._indexes = indexes
         # Provide configured url/token info to handler class that each request instance would need.
-        ProxyHTTPRequestHandler.indexes = self._indexes
+        ProxyHTTPRequestHandler.indexes = indexes
 
     def start(self) -> None:
         "Start up the proxy an seperate thread."
@@ -145,32 +149,44 @@ class ResponseClient(NamedTuple):
 
 class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     # Indexes to use in communication. This property is set on IndexProxy initialization.
-    indexes: Tuple[IndexConfig]
+    indexes: Tuple[IndexConfig, ...]
     protocol_version = "HTTP/1.1"
 
     def _handle_request(self, method: Method) -> ResponseClient:
         """Businuess logic for handeling the request."""
 
         headers = dict(self.headers)
-
-        # TODO implement fall back logic based on the different urls:
-        index = self.indexes[0]
-
-        # TODO not exactly sure what the correct Host should be... but for now seems we can leave
-        # it out. TODO investigate
+        # TODO not exactly sure what the correct Host header should be... 
+        # but for now seems we can leave it out. TODO investigate 
         del headers["Host"]
-        if index.auth_token:
-            headers["Authorization"] = "Bearer " + index.auth_token
 
-        resp = urllib3.request(
-            method.value,
-            url=index.url + self.path,
-            decode_content=False,
-            headers=headers,
-        )
+        for index in self.indexes:
+
+            if index.access_token:
+                headers["Authorization"] = "Bearer " + index.access_token
+            else:
+                if "Authorization" in headers:
+                    del headers["Authorization"] 
+
+            resp = urllib3.request(
+                method.value,
+                url=index.url + self.path,
+                decode_content=False,
+                headers=headers,
+            )
+            # If resource not found try next index.
+            if resp.status == 404:
+                continue 
+
+            return ResponseClient(
+                status_code=resp.status, headers=dict(resp.headers), content=resp.data
+            ) 
+        
+        # If we get here then it means no index has the resource. Return the response of the 
+        # the last call index.
         return ResponseClient(
             status_code=resp.status, headers=dict(resp.headers), content=resp.data
-        )
+        ) 
 
     def do_request(self):
         "Top-level Wrapper for handeling all the different kind of method requests"
