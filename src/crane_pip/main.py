@@ -1,20 +1,9 @@
-import logging
-import sys
+from importlib import import_module
+from .argparser import root_parser
 
-from .proxy import IndexProxy
-from .pip import call_pip, prepare_pip_args, requires_index, get_index_url
-
-logger = logging.getLogger(__name__)
-
+# Load the different commando's module to have their arg parser get attached to the root_parser.
+import_module(".cmd_pip")
 
 def main() -> int:
-    # Remove first argument which is
-    args = sys.argv[1:]
-    url = get_index_url(args)
-    if requires_index(args):
-        with IndexProxy(index_url=url) as p:
-            new_args = prepare_pip_args(args=args, proxy_address=p.proxy_address)
-            call_pip(args=new_args)
-    else:
-        call_pip(args=args)
-    return 0
+    parsed_args, unknown_args = root_parser.parse_known_args()
+    return parsed_args.entrypoint_command(parsed_args, unknown_args)

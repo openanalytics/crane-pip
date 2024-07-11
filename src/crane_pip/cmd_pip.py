@@ -1,17 +1,45 @@
+import argparse
 from typing import List, Union
 from subprocess import check_call, CalledProcessError
 import logging
 import sys
 
-from .proxy import ProxyAddress
+from .argparser import subparser
+from .proxy import ProxyAddress, IndexProxy
 
 logger = logging.getLogger(__name__)
+
+# Parser for the crane pip command (not to be confused with the pip command itself)
+argparser_pip = subparser.add_parser("pip")
+
+class NoIndexError(Exception):
+    pass
+
+def entrypoint_pip(known_args: argparse.Namespace, unknown_args: List[str]) -> int:
+    "Entry point of the 'crane pip' command."
+
+    # Arguments not explicitly parsed are meant for pip.
+    args_for_pip = unknown_args
+
+    if not call_requires_index(args_for_pip):
+        call_pip(args=args_for_pip)
+        return 0
+
+    url = get_index_url(args_for_pip)
+    with IndexProxy(index_url=url) as p:
+        new_args = prepare_pip_args(args=args_for_pip, proxy_address=p.proxy_address)
+        call_pip(args=new_args)
+
+    return 0
+
+argparser_pip.set_defaults(entrypoint_command=entrypoint_pip)
+
 
 PIP_COMMANDS_WITH_INDEX = {"install", "download", "search", "index", "wheel"}
 
 
 def get_index_url(args: List[str]) -> Union[str, None]:
-    "Get the index url from a pip command  call."
+    "Get the index url from a pip command call."
     is_url = False
     for arg in args:
         if is_url:
@@ -119,3 +147,6 @@ def call_pip(args: List[str] = []) -> None:
     except Exception as e:
         logger.critical(f"pip process failed to launch with the following error: {e}")
         raise LaunchPipError("Failed to launch pip") from e
+
+
+
