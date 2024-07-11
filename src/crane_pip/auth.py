@@ -2,8 +2,8 @@
 from datetime import datetime, timedelta
 import json
 import time
-from .config import CraneConfig, config
-from .cache import IndexTokens, cache
+from .config import CraneServerConfig, crane_configs
+from .cache import CraneTokens, token_cache
 
 import urllib3
 
@@ -48,7 +48,7 @@ class AuthorizationPendingFailed(RequestError):
     pass
 
 
-def refresh(tokens: IndexTokens, index_config: CraneConfig) -> IndexTokens:
+def refresh(tokens: CraneTokens, index_config: CraneServerConfig) -> CraneTokens:
     """Fetch new tokens using the refresh token and return a **new copy** of tokens.
 
     An ExpiredTokens error is raised incase the refresh tokens was already expired."""
@@ -74,7 +74,7 @@ def refresh(tokens: IndexTokens, index_config: CraneConfig) -> IndexTokens:
         raise FailedRefreshRequest
 
     now = datetime.now()
-    new_tokens = IndexTokens(
+    new_tokens = CraneTokens(
         access_token = content["access_token"],
         refresh_token = content["refresh_token"],
         access_token_exp_time = now + timedelta(seconds=content["expires_in"]),
@@ -82,13 +82,13 @@ def refresh(tokens: IndexTokens, index_config: CraneConfig) -> IndexTokens:
     )
     return new_tokens
 
-def perform_device_auth_flow(index_url: str) -> IndexTokens:
+def perform_device_auth_flow(index_url: str) -> CraneTokens:
     """Perform device authentication for a given index config and return the acquired tokens.
 
     The calling is blocking until the user has performed the authentication in a browser.
     """
 
-    index_config = config.get(index_url)
+    index_config = crane_configs.get(index_url)
     if not index_config:
         raise UnregisterdIndex(
             "Cannot perform device authentication flow for unregisted index {index_url}. "
@@ -159,7 +159,7 @@ def perform_device_auth_flow(index_url: str) -> IndexTokens:
 
         now = datetime.now()
 
-        IndexTokens(
+        CraneTokens(
             access_token=content["access_token"],
             refresh_token=content["refresh_token"],
             access_token_exp_time=now + timedelta(seconds=content["expires_in"]),
@@ -182,10 +182,10 @@ def get_access_token(index_url: str) -> str:
         Incase there are no configurations found for the index url which are needed if we want 
         to request new tokens using the refresh token.
     """
-    tokens = cache[index_url]
-    index_config = config[index_url]
+    tokens = token_cache[index_url]
+    index_config = crane_configs[index_url]
 
-    if not config:
+    if not crane_configs:
         raise UnregisterdIndex("Index url = {index_url} is not registed. "
             "Please registed the index first using the 'regerist-index' command.")
 
@@ -199,7 +199,7 @@ def get_access_token(index_url: str) -> str:
         return tokens.access_token
     if tokens.expired_but_can_refresh():
         new_tokens = refresh(tokens, index_config)
-        cache[index_url] = refresh(tokens, index_config)
+        token_cache[index_url] = refresh(tokens, index_config)
         return new_tokens.access_token
     raise ExpiredTokens
 
@@ -209,10 +209,10 @@ def authenticate(index_url: str) -> str:
     Preferable the token is first checked if present in the cache or if it can get refreshed.
     """
 
-    token = cache.get(index_url)
+    token = token_cache.get(index_url)
     if not token or token.is_expired():
         new_tokens = perform_device_auth_flow(index_url)
-        cache[index_url] = new_tokens
+        token_cache[index_url] = new_tokens
         return new_tokens.access_token
 
     return get_access_token(index_url)
