@@ -55,6 +55,9 @@ class TokenCache(UserDict[str, CraneTokens]):
     """Dictionary with the cached crane server tokens. Key = crane server url, 
     
     Setting an item also writes away the the in-memory cached state to disk.
+
+    Other modules should interact with the configs via the token_cache object 
+    and do not directly access this class! Else multiple in-memory states will get out of sync.
     """
 
     cache_dir = os.path.join(Path.home(), ".cache", "crane", "python")
@@ -76,7 +79,3 @@ class TokenCache(UserDict[str, CraneTokens]):
             f.write(json.dumps(to_write))
 
 token_cache = TokenCache()
-
-# Other modules should interact with the cache via the above object.
-# Else multiple in-memory states will get out of sync.
-del TokenCache

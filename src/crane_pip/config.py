@@ -34,6 +34,9 @@ class ServerConfigs(UserDict[str, ServerConfig]):
     """A dictionary representing the stored crane server configs on disk. Key = crane server url, 
     
     Setting an item also saves the config on disk.
+
+    Other modules should interact with the configs via the server_configs object 
+    and do not directly access this class! Else multiple in-memory states will get out of sync.
     """
     config_dir = os.path.join(Path.home(), ".local", "share", "crane", "python")
     os.makedirs(config_dir, exist_ok=True)
@@ -56,7 +59,3 @@ class ServerConfigs(UserDict[str, ServerConfig]):
 
 
 server_configs = ServerConfigs()
-
-# Other modules should interact with the configs via the above object.
-# Else multiple in-memory states will get out of sync.
-del ServerConfigs
