@@ -148,7 +148,7 @@ class ResponseClient(NamedTuple):
 
 
 class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
-    # Indexes to use in communication. This property is set on IndexProxy initialization.
+    # Indexes to forward request to. This property is set on IndexProxy initialization.
     indexes: Tuple[IndexConfig, ...]
     protocol_version = "HTTP/1.1"
 

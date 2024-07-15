@@ -1,4 +1,3 @@
-import argparse
 from typing import List, Union
 from subprocess import check_call, CalledProcessError
 import logging
@@ -10,24 +9,25 @@ from .proxy import ProxyAddress, IndexProxy
 logger = logging.getLogger(__name__)
 
 # Parser for the crane pip command (not to be confused with the pip command itself)
-argparser_pip = subparser.add_parser("pip")
+argparser_pip = subparser.add_parser("pip", add_help=False)
+argparser_pip.add_argument('pip_arguments', nargs='*')
 
 class NoIndexError(Exception):
     pass
 
-def entrypoint_pip(known_args: argparse.Namespace, unknown_args: List[str]) -> int:
+def entrypoint_pip(args) -> int:
     "Entry point of the 'crane pip' command."
 
     # Arguments not explicitly parsed are meant for pip.
-    args_for_pip = unknown_args
+    args.pip_arguments
 
-    if not call_requires_index(args_for_pip):
-        call_pip(args=args_for_pip)
+    if not call_requires_index(args.pip_arguments):
+        call_pip(args=args.pip_arguments)
         return 0
 
-    url = get_index_url(args_for_pip)
+    url = get_index_url(args.pip_arguments)
     with IndexProxy(index_url=url) as p:
-        new_args = prepare_pip_args(args=args_for_pip, proxy_address=p.proxy_address)
+        new_args = prepare_pip_args(args=args.pip_arguments, proxy_address=p.proxy_address)
         call_pip(args=new_args)
 
     return 0
