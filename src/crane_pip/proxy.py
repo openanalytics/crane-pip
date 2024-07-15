@@ -17,7 +17,7 @@ class ProxyError(Exception):
     pass
 
 
-class ProxyControlError(ProxyError):
+class ProxyLifetimeError(ProxyError):
     pass
 
 
@@ -46,6 +46,8 @@ class IndexProxy:
     index_url: str | None
         Either the url of a registed crane protected index. Or None in which case requested will 
         simply be forwarded to PyPI.
+    port: int 
+        Port number to serve the proxy under. (Default: 9999)
 
     Configuration:
     --------------
@@ -64,15 +66,15 @@ class IndexProxy:
 
     Lifetime:
     ---------
-    Start and stop the server using the methods start/stop. The lifetime can also be managed via
-    a context manager.
+    Start and stop the server in a seperate thread using the methods start/stop. 
+    The lifetime can also be managed via a context manager.
     """
 
-    def __init__(self, index_url: Union[str, None]) -> None:
+    def __init__(self, index_url: Union[str, None], port: int = 9999) -> None:
         self._proxy: ThreadedHTTPServer
         self._proxy_thread: Thread
 
-        self.proxy_address = ProxyAddress(host="127.0.0.1", port=9999)
+        self.proxy_address = ProxyAddress(host="127.0.0.1", port=port)
         self.is_running: bool = False
         
         
@@ -95,12 +97,28 @@ class IndexProxy:
         "Start up the proxy an seperate thread."
         if not self.is_running:
             self._proxy = ThreadedHTTPServer(self.proxy_address, ProxyHTTPRequestHandler)
-            print(f"Starting proxy on {self.proxy_address.url()}")
+            logger.debug(f"Starting proxy on {self.proxy_address.url()}")
             self._proxy_thread = Thread(target=self._proxy.serve_forever)
             self._proxy_thread.start()
             self.is_running = True
         else:
-            raise ProxyControlError(f"Proxy is already running on {self.proxy_address}")
+            raise ProxyLifetimeError(f"Proxy is already running on {self.proxy_address.url()}")
+
+    def start_here(self) -> None:
+        """Start up the proxy in this thread. 
+
+        This function only returns in case of Keyboard interupt."""
+        if self.is_running:
+            raise ProxyLifetimeError(f"Proxy is already running on {self.proxy_address.url()}")
+
+        self._proxy = ThreadedHTTPServer(self.proxy_address, ProxyHTTPRequestHandler)
+        logger.debug(f"Starting proxy on {self.proxy_address.url()}")
+        self.is_running = True
+        try:
+            self._proxy.serve_forever()
+        except KeyboardInterrupt:
+            logger.debug(f"Shutting down proxy server")
+            self.is_running = False 
 
     def __enter__(self):
         self.start()
@@ -113,12 +131,12 @@ class IndexProxy:
             self._proxy.shutdown()
             self.is_running = False
         else:
-            raise ProxyControlError(f"No proxy running to stop.")
+            raise ProxyLifetimeError(f"No proxy running to stop.")
 
     def __exit__(self, *exc):
         try:
             self.stop()
-        except ProxyControlError:
+        except ProxyLifetimeError:
             logger.debug("Proxy already stopped in the context manager.")
 
 
@@ -224,6 +242,3 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
             super().handle_error(request, client_address)
 
 
-if __name__ == "main":
-    proxy = IndexProxy()
-    proxy.start()
