@@ -63,6 +63,9 @@ class TokenCache(UserDict[str, CraneTokens]):
     cache_dir = os.path.join(Path.home(), ".cache", "crane", "python")
     os.makedirs(cache_dir, exist_ok=True)
     token_cache_file = os.path.join(cache_dir, "tokens.json")
+    if not os.path.isfile(token_cache_file):
+        with open(token_cache_file, "w") as f:
+            f.write(json.dumps({}))
     
     def __init__(self):
         with open(self.token_cache_file, "r") as f:

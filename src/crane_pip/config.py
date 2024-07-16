@@ -41,6 +41,9 @@ class ServerConfigs(UserDict[str, ServerConfig]):
     config_dir = os.path.join(Path.home(), ".local", "share", "crane", "python")
     os.makedirs(config_dir, exist_ok=True)
     server_config_file = os.path.join(config_dir, "servers.json")
+    if not os.path.isfile(server_config_file):
+        with open(server_config_file, "w") as f:
+            f.write(json.dumps({}))
     
     def __init__(self):
         with open(self.server_config_file, "r") as f:
