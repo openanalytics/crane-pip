@@ -1,10 +1,13 @@
 # Second attempt
 from datetime import datetime, timedelta
-import json
 import time
+import logging
+import webbrowser
+from urllib.parse import urlencode
 from .config import ServerConfig, server_configs
 from .cache import CraneTokens, token_cache
 
+logger = logging.getLogger(__name__)
 import urllib3
 
 
@@ -56,18 +59,19 @@ def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
     if tokens.refresh_token_expired():
         raise ExpiredTokens
 
-    payload = {
+    logger.info("Refreshing access tokes.")
+    payload = urlencode({
         "grant_type": "refresh_token",
         "refresh_token": tokens.refresh_token,
         "client_id": crane_config.client_id,
-    }
+    })
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     response = urllib3.request(
         method="POST",
         url=crane_config.token_url,
         headers=headers,
-        body=json.dumps(payload),
+        body=payload,
     )
     content = response.json()
     if response.status >= 400 or (not content) or not isinstance(content, dict):
@@ -82,6 +86,7 @@ def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
     )
     return new_tokens
 
+
 def perform_device_auth_flow(crane_url: str) -> CraneTokens:
     """Perform device authentication for a given crane server and return the acquired tokens.
 
@@ -91,21 +96,20 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
     crane_config = server_configs.get(crane_url)
     if not crane_config:
         raise UnregisterdServer(
-            "Cannot perform device authentication flow for unregisted url {crane_url}. "
-            "Use the `register` command to register the crane server."
+            f"Cannot perform device authentication flow for unregistered index {crane_url}. "
+            "Please first register the index using the 'crane index register' command."
         )
 
-    ## Part 1: request the device login.
-    payload = {"client_id": crane_config.client_id, "scope": "openid offline_access"}
-
+    ## Part 1: request the device code
+    payload = urlencode({"client_id": crane_config.client_id, "scope": "openid offline_access"})
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
     response = urllib3.request(
         method="POST",
-        url=crane_config.device_code_url,
-        headers=headers,
-        body=json.dumps(payload),
+        url=crane_config.device_url,
+        body = payload,
+        headers=headers
     )
+    
     content = response.json()
     if response.status >= 400 or (not content) or not isinstance(content, dict):
         raise FailedDeviceCodeRequest
@@ -117,10 +121,16 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
         request_interval = 2
 
     ## Part 2: Call for user actions
-    print("------------------------------")
-    print("Please authenticate:")
-    print(f"\tpoint your browser to: {content['verification_uri']}")
-    print(f"\tand enter your user code: {content['user_code']}")
+    try: 
+        webbrowser.open(content['verification_uri_complete'], new = 2)
+        print("------------------------------")
+        print("Please authenticate in the webbrowser page that just opened or")
+    except Exception:
+        print("------------------------------")
+        print("Please authenticate:")
+         
+    print(f"point your browser to: {content['verification_uri']}")
+    print(f"and enter your user code: {content['user_code']}")
     if "verification_uri_complete" in content:
         print(f"\tor use the direct link: {content['verification_uri_complete']}")
     print("------------------------------" "")
@@ -131,19 +141,20 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
         time.sleep(request_interval)
         print(".", sep="", end="", flush=True)
 
-        payload = {
+        payload = urlencode({
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             "device_code": device_code,
             "client_id": crane_config.client_id,
-        }
+        })
 
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
+
         response = urllib3.request(
             method="POST",
-            url=crane_config.device_code_url,
+            url=crane_config.token_url,
             headers=headers,
-            body=json.dumps(payload),
+            body=payload,
         )
         content = response.json()
         if content is None:
@@ -158,13 +169,12 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
                 raise AuthorizationPendingFailed
 
         now = datetime.now()
-
-        CraneTokens(
+        print("\nAuthentication successfull!")
+        return CraneTokens(
             access_token=content["access_token"],
             refresh_token=content["refresh_token"],
             access_token_exp_time=now + timedelta(seconds=content["expires_in"]),
-            refresh_token_exp_time=now
-            + timedelta(seconds=content["refresh_expires_in"]),
+            refresh_token_exp_time=now + timedelta(seconds=content["refresh_expires_in"]),
         )
 
 
@@ -195,6 +205,7 @@ def get_access_token(crane_url: str) -> str:
         )
 
     if not tokens.access_token_expired():
+        logger.info("Using cached access token")
         return tokens.access_token
     if tokens.expired_but_can_refresh():
         new_tokens = refresh(tokens, crane_config)

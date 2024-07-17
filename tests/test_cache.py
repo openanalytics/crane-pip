@@ -52,16 +52,16 @@ def test_crane_tokens():
     raw = json.loads('''
         {
             "access_token":"token1",
-            "access_token_exp_time": "2024-01-01T00:00:00Z"
+            "access_token_exp_time": "2024-01-01T00:00:00",
             "refresh_token":"refresh_token1",
-            "refresh_token_exp_time": "2024-03-01T00:00:00Z"
+            "refresh_token_exp_time": "2024-03-01T00:00:00"
         }''')
     parsed_token = CraneTokens.from_json(raw)
     assert isinstance(parsed_token, CraneTokens)
     assert parsed_token.access_token == 'token1'
-    assert parsed_token.access_token_exp_time == datetime.fromisoformat("2024-01-01T00:00:00Z")
+    assert parsed_token.access_token_exp_time == datetime.fromisoformat("2024-01-01T00:00:00")
     assert parsed_token.refresh_token == 'refresh_token1'
-    assert parsed_token.refresh_token_exp_time == datetime.fromisoformat("2024-03-01T00:00:00Z")
+    assert parsed_token.refresh_token_exp_time == datetime.fromisoformat("2024-03-01T00:00:00")
 
     serialized = parsed_token.to_json()
     assert raw == serialized

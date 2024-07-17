@@ -9,30 +9,27 @@ from .proxy import ProxyAddress, IndexProxy
 logger = logging.getLogger(__name__)
 
 # Parser for the crane pip command (not to be confused with the pip command itself)
-argparser_pip = subparser.add_parser("pip", add_help=False)
-argparser_pip.add_argument('pip_arguments', nargs='*')
+argparser_pip = subparser.add_parser("pip", help='Any pip command, but crane indexes do get correctly authenticated.', add_help=False)
 
 class NoIndexError(Exception):
     pass
 
-def entrypoint_pip(args) -> int:
+def entrypoint_pip(args_for_pip) -> int:
     "Entry point of the 'crane pip' command."
 
     # Arguments not explicitly parsed are meant for pip.
-    args.pip_arguments
-
-    if not call_requires_index(args.pip_arguments):
-        call_pip(args=args.pip_arguments)
+    if not call_requires_index(args_for_pip):
+        call_pip(args=args_for_pip)
         return 0
 
-    url = get_index_url(args.pip_arguments)
+    url = get_index_url(args_for_pip)
     with IndexProxy(index_url=url) as p:
-        new_args = prepare_pip_args(args=args.pip_arguments, proxy_address=p.proxy_address)
+        new_args = prepare_pip_args(args=args_for_pip, proxy_address=p.proxy_address)
         call_pip(args=new_args)
 
     return 0
 
-argparser_pip.set_defaults(entrypoint_command=entrypoint_pip)
+argparser_pip.set_defaults(entrypoint_pip=entrypoint_pip)
 
 
 PIP_COMMANDS_WITH_INDEX = {"install", "download", "search", "index", "wheel"}

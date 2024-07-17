@@ -8,7 +8,7 @@ import os
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 
 @dataclass
 class CraneTokens:
@@ -50,8 +50,13 @@ class CraneTokens:
     def is_expired(self) -> bool:
         return self.access_token_expired() and self.refresh_token_expired()
 
+# Starting from 3.9 this is not needed anymore: https://stackoverflow.com/a/72436468
+if TYPE_CHECKING:
+    TypedUserDict = UserDict[str, CraneTokens]
+else:
+    TypedUserDict = UserDict
 
-class TokenCache(UserDict[str, CraneTokens]):
+class TokenCache(TypedUserDict):
     """Dictionary with the cached crane server tokens. Key = crane server url, 
     
     Setting an item also writes away the the in-memory cached state to disk.
@@ -63,16 +68,27 @@ class TokenCache(UserDict[str, CraneTokens]):
     cache_dir = os.path.join(Path.home(), ".cache", "crane", "python")
     os.makedirs(cache_dir, exist_ok=True)
     token_cache_file = os.path.join(cache_dir, "tokens.json")
-    if not os.path.isfile(token_cache_file):
-        with open(token_cache_file, "w") as f:
-            f.write(json.dumps({}))
     
     def __init__(self):
-        with open(self.token_cache_file, "r") as f:
-            self.data = {url: CraneTokens.from_json(tokens) for url, tokens in json.load(f)}
+
+        if not os.path.isfile(self.token_cache_file):
+            with open(self.token_cache_file, "w") as f:
+                f.write(json.dumps({}))
+            self.data = {}
+        else:
+            with open(self.token_cache_file, "r") as f:
+                raw_data = json.load(f)
+                self.data = {
+                    url: CraneTokens.from_json(tokens)
+                    for url, tokens in raw_data.items()
+                }
 
     def __setitem__(self, key: str, item: CraneTokens) -> None:
         self.data[key] = item
+        self._write()
+
+    def __delitem__(self, key) -> None:
+        del self.data[key]
         self._write()
 
     def _write(self):
@@ -80,5 +96,6 @@ class TokenCache(UserDict[str, CraneTokens]):
         to_write = {url: tokens.to_json() for url, tokens in self.data.items()}
         with open(self.token_cache_file, "w") as f:
             f.write(json.dumps(to_write))
+
 
 token_cache = TokenCache()

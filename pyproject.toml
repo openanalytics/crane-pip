@@ -6,13 +6,15 @@ authors = [
     { name = "Lennart Tuijnder", email = "lennart.tuijnder@openanalytics.eu" },
     { name = "Tobia De Koninck", email = "tobia.dekoninck@openanalytics.eu" }
 ]
-dependencies = ['urllib3~=2.2.1']
+dependencies = [
+    'urllib3~=2.2.1',
+]
 readme = "README.md"
 requires-python = ">= 3.8"
 classifiers = ["Private :: Do Not Upload"]
 
 [project.scripts]
-"crane" = "crane:main"
+"crane" = "crane_pip:main"
 
 [build-system]
 requires = ["hatchling"]

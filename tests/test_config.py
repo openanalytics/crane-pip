@@ -22,12 +22,12 @@ def configs() -> Tuple[ServerConfig, ServerConfig]:
     config1 = ServerConfig(
         client_id="client1",
         token_url="token_url1",
-        device_code_url="device_code_url1"
+        device_url="device_url1"
     )
     config2 = ServerConfig(
         client_id="client2",
         token_url="token_url2",
-        device_code_url="device_code_url2"
+        device_url="device_url2"
     )
     return config1, config2
 
@@ -49,14 +49,14 @@ def test_crane_configs():
     raw = json.loads('''
         {
             "client_id":"client1",
-            "token_url": "token_url1"
-            "device_code_url":"device_code_url2",
+            "token_url": "token_url1",
+            "device_url":"device_url1"
         }''')
     parsed_config = ServerConfig.from_json(raw)
     assert isinstance(parsed_config, ServerConfig)
     assert parsed_config.client_id == 'client1'
     assert parsed_config.token_url == 'token_url1'
-    assert parsed_config.device_code_url == 'device_code_url1'
+    assert parsed_config.device_url == 'device_url1'
 
     serialized = parsed_config.to_json()
     assert raw == serialized
