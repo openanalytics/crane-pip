@@ -78,11 +78,16 @@ def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
         raise FailedRefreshRequest
 
     now = datetime.now()
+    if content['refresh_expires_in']==0:
+        refresh_token_exp_time = None
+    else:
+        refresh_token_exp_time = now + timedelta(seconds=content["refresh_expires_in"])
+
     new_tokens = CraneTokens(
         access_token = content["access_token"],
         refresh_token = content["refresh_token"],
         access_token_exp_time = now + timedelta(seconds=content["expires_in"]),
-        refresh_token_exp_time = now + timedelta(seconds=content["refresh_expires_in"])
+        refresh_token_exp_time = refresh_token_exp_time
     )
     return new_tokens
 
@@ -110,6 +115,7 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
         headers=headers
     )
     
+    # breakpoint()
     content = response.json()
     if response.status >= 400 or (not content) or not isinstance(content, dict):
         raise FailedDeviceCodeRequest
@@ -132,7 +138,7 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
     print(f"point your browser to: {content['verification_uri']}")
     print(f"and enter your user code: {content['user_code']}")
     if "verification_uri_complete" in content:
-        print(f"\tor use the direct link: {content['verification_uri_complete']}")
+        print(f"or use the direct link: {content['verification_uri_complete']}")
     print("------------------------------" "")
 
     ## Part 3: Start polling:
@@ -168,13 +174,18 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
                 print(content)
                 raise AuthorizationPendingFailed
 
-        now = datetime.now()
         print("\nAuthentication successfull!")
+        now = datetime.now()
+        if content['refresh_expires_in']==0:
+            refresh_token_exp_time = None
+        else:
+            refresh_token_exp_time = now + timedelta(seconds=content["refresh_expires_in"])
+
         return CraneTokens(
             access_token=content["access_token"],
             refresh_token=content["refresh_token"],
             access_token_exp_time=now + timedelta(seconds=content["expires_in"]),
-            refresh_token_exp_time=now + timedelta(seconds=content["refresh_expires_in"]),
+            refresh_token_exp_time = refresh_token_exp_time
         )
 
 

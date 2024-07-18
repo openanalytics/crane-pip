@@ -30,7 +30,7 @@ def tokens() -> Tuple[CraneTokens, CraneTokens]:
         access_token="token2",
         access_token_exp_time=datetime.now() + timedelta(minutes=5),
         refresh_token="refresh_token2",
-        refresh_token_exp_time=datetime.now() + timedelta(days=30)
+        refresh_token_exp_time=None
     )
     return token1, token2
 
@@ -65,6 +65,19 @@ def test_crane_tokens():
 
     serialized = parsed_token.to_json()
     assert raw == serialized
+
+    raw = json.loads('''
+        {
+            "access_token":"token2",
+            "access_token_exp_time": "2024-01-01T00:00:00",
+            "refresh_token":"refresh_token2"
+        }''')
+    parsed_token = CraneTokens.from_json(raw)
+    assert parsed_token.refresh_token_exp_time is None
+
+    serialized = parsed_token.to_json()
+    assert raw == serialized
+
 
 def test_initial_cache(tmp_cache: TokenCache, tokens):
 

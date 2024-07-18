@@ -8,7 +8,7 @@ import os
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING, Union
 
 @dataclass
 class CraneTokens:
@@ -17,31 +17,39 @@ class CraneTokens:
     access_token: str
     access_token_exp_time: datetime
     refresh_token: str
-    refresh_token_exp_time: datetime
+    refresh_token_exp_time: Union[datetime, None] # None if it does not expire
 
     @classmethod
     def from_json(cls, cache: Dict[str, str]) -> CraneTokens:
         "Generate a TokenCache from a the read cache dictionary."
+        if "refresh_token_exp_time" in cache:
+            refresh_token_exp_time = datetime.fromisoformat(cache["refresh_token_exp_time"]) 
+        else:
+            refresh_token_exp_time = None
         return cls(
             access_token=cache["access_token"],
             access_token_exp_time=datetime.fromisoformat(cache["access_token_exp_time"]),
             refresh_token=cache["refresh_token"],
-            refresh_token_exp_time=datetime.fromisoformat(cache["refresh_token_exp_time"]),
+            refresh_token_exp_time=refresh_token_exp_time
         )
 
     def to_json(self) -> Dict[str, str]:
         "Return dictionary to be stored in the json cache file"
-        return {
+        d = {
             "access_token": self.access_token,
             "access_token_exp_time": self.access_token_exp_time.isoformat(),
             "refresh_token": self.refresh_token,
-            "refresh_token_exp_time": self.refresh_token_exp_time.isoformat(),
         }
+        if self.refresh_token_exp_time:
+            d["refresh_token_exp_time"] = self.refresh_token_exp_time.isoformat()
+        return d
 
     def access_token_expired(self) -> bool:
         return self.access_token_exp_time < datetime.now()
 
     def refresh_token_expired(self) -> bool:
+        if not self.refresh_token_exp_time:
+            return True
         return self.refresh_token_exp_time < datetime.now()
 
     def expired_but_can_refresh(self) -> bool:

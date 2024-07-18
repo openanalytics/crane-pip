@@ -192,6 +192,9 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 decode_content=False,
                 headers=headers,
             )
+            # TODO handle different responses gracefully. Like 403
+            #breakpoint()
+
             # If resource not found try next index.
             if resp.status == 404:
                 continue 
