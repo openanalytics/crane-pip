@@ -1,9 +1,11 @@
 from enum import Enum
 import sys
+import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from threading import Thread
 from typing import NamedTuple, Tuple, Dict, Union
+from urllib.parse import urlparse
 
 import urllib3
 import logging
@@ -170,6 +172,7 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     indexes: Tuple[IndexConfig, ...]
     protocol_version = "HTTP/1.1"
 
+
     def _handle_request(self, method: Method) -> ResponseClient:
         """Businuess logic for handeling the request."""
 
@@ -177,7 +180,7 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
         # TODO not exactly sure what the correct Host header should be... 
         # but for now seems we can leave it out. TODO investigate 
         del headers["Host"]
-
+        
         for index in self.indexes:
 
             if index.access_token:
@@ -185,28 +188,33 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             else:
                 if "Authorization" in headers:
                     del headers["Authorization"] 
+            
 
             resp = urllib3.request(
                 method.value,
-                url=index.url + self.path,
+                url=self._get_request_url(index),
+                #url=index.url+self.path,
                 decode_content=False,
                 headers=headers,
             )
-            # TODO handle different responses gracefully. Like 403
-            #breakpoint()
+            #print(f"Url={self._get_request_url(index)} and is 404? = {self._is_404(resp)}")
 
             # If resource not found try next index.
-            if resp.status == 404:
+            if self._is_404(resp):
                 continue 
 
             return ResponseClient(
-                status_code=resp.status, headers=dict(resp.headers), content=resp.data
+                status_code=resp.status,
+                headers=dict(resp.headers),
+                content=resp.data
             ) 
         
         # If we get here then it means no index has the resource. Return the response of the 
         # the last call index.
         return ResponseClient(
-            status_code=resp.status, headers=dict(resp.headers), content=resp.data
+            status_code=resp.status,
+            headers=dict(resp.headers),
+            content=resp.data
         ) 
 
     def do_request(self):
@@ -221,14 +229,73 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             method = Method(self.command)
             resp = self._handle_request(method)
             self.send_response(resp.status_code)
-            for key, value in resp.headers.items():
-                self.send_header(key, value)
-            self.end_headers()
+            self._send_response_headers(resp.headers, resp.content)
             if method.response_has_content() and resp.content:
                 self.wfile.write(resp.content)
 
         except Exception:
             self.send_error(502, "Bad gateway")
+
+    def _is_404(self, resp: urllib3.BaseHTTPResponse) -> bool: 
+        """Is the response a 404? Currently a bug in crane that turns actual 404 response in 200"""
+
+        if resp.status == 404: 
+            return True
+        if resp.status != 200:
+            return False 
+       
+        if 'text/html' in resp.headers['Content-Type']:
+            return 'Not found' in resp.data.decode()
+        if 'application/json' in resp.headers['Content-Type']: 
+            parsed = json.loads(resp.data)
+            if isinstance(parsed, dict) and 'code' in parsed and parsed['code'] == 404:
+                return True
+        return False
+
+         
+
+    def _get_request_url(self, index: IndexConfig) -> str:
+        """Get the url to forward the request to based on the index we send to."""
+        # If self.path endswith `/` then pip tried to add `/package_name/` to the 
+        # base index url to explore the available versions of a package.
+        #
+        # Note, the base index-url might already contains a path like https://pypi.org/simple/ 
+        # and so pip requests a path `/package_name/` relative to the path path of the index url.
+        #
+        # The reponse is html containing href links usually absolute path links of the website. 
+        # Eg. /simple/package_name/package_name-1.2.0.tar.gz and so the download request will 
+        # be interms of absolute path.
+        # 
+        # But since we force pip to talk to localhost:9999 we have the situation that self.path 
+        # is one time with relative path to that of the index-url and the other time with absolute 
+        # path from the index-url
+        if self.path.endswith('/'): 
+            url = index.url + self.path
+        else:
+            parsed_url = urlparse(index.url)
+            url = parsed_url.scheme + "://" + parsed_url.netloc + self.path
+        return url
+
+
+    def _send_response_headers(self, headers: Dict, content: Union[bytes, None]):
+        """Adjust and send response headers to the client
+        
+        We have to set Content-Length if the response from the index was chunked.
+
+        Arguments:
+        ----------
+        headers: dict 
+            Dictionary of headers as responded back by the 
+        """
+        res = {h.lower():v for h,v in headers.items() if h.lower() != 'transfer-encoding'}
+        if 'content-length' not in res:
+            if content:
+                res['content-length'] = str(len(content))
+            else: 
+                res['content-length'] = '0'
+        for k, v in res.items():
+            self.send_header(k, v)
+        self.end_headers()
 
 
 # Dispatch all the different method calls to do_request
