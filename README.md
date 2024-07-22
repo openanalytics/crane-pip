@@ -7,7 +7,7 @@
 - Installing python package from OAuth 2 protected indexes (provided by crane)
 - Fall back to PyPI if (package of sub-dependencies are not found in the private index)
 - Private index takes installation priority (regardlesss of package versions in PyPI)
-- Third party client support (pip/uv/poetry/etc..). Provided the needed setup in the respecive tools is done. See [below](#third-party-client-support).
+- Third party client support (pip/uv/poetry/etc..). Provided the needed setup in the respective tools is done. See [below](#third-party-client-support).
 
 ## Installation (from source)
 
@@ -73,7 +73,7 @@ Will install [cowsay](https://github.com/VaasuDevanS/cowsay-python) if the packa
 
 On first time usage, you will get promted to authenticate yourself in the browser. A browser window should automatically open or you can manually open one with the urls printed in the console.
 
-The access token and refresh token are cached and you will only get promted 
+The access token and refresh token are cached and you will only get promted again for authentication if both the access and refresh token have expired.
 
 
 #### Limitations
