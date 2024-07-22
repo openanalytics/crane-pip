@@ -85,7 +85,7 @@ def test_existing_server_configs(tmp_server_configs_prefilled: ServerConfigs, co
     assert server_configs.get("url1") == configs[0]
     assert server_configs["url2"] == configs[1]
     assert (
-        server_configs.get("url3") == None
+        server_configs.get("url3") is None
     ), "get operation works as expected on server_configs object"
 
 

@@ -54,10 +54,10 @@ def tmp_cache_prefilled(tmp_cache, tokens) -> TokenCache:
 def test_crane_tokens():
     raw = json.loads("""
         {
-            "access_token":"token1",
-            "access_token_exp_time": "2024-01-01T00:00:00",
-            "refresh_token":"refresh_token1",
-            "refresh_token_exp_time": "2024-03-01T00:00:00"
+            "access_token" : "token1",
+            "access_token_exp_time" : "2024-01-01T00:00:00",
+            "refresh_token" : "refresh_token1",
+            "refresh_token_exp_time" : "2024-03-01T00:00:00"
         }""")
     parsed_token = CraneTokens.from_json(raw)
     assert isinstance(parsed_token, CraneTokens)
@@ -71,9 +71,10 @@ def test_crane_tokens():
 
     raw = json.loads("""
         {
-            "access_token":"token2",
+            "access_token" : "token2",
             "access_token_exp_time": "2024-01-01T00:00:00",
-            "refresh_token":"refresh_token2"
+            "refresh_token" : "refresh_token2",
+            "refresh_token_exp_time" : null
         }""")
     parsed_token = CraneTokens.from_json(raw)
     assert parsed_token.refresh_token_exp_time is None
@@ -107,7 +108,7 @@ def test_existing_cache(tmp_cache_prefilled: TokenCache, tokens):
     assert "url1" in cache and "url2" in cache, "Existing cache is read correctly"
     assert cache.get("url1") == tokens[0]
     assert cache["url2"] == tokens[1]
-    assert cache.get("url3") == None, "get operation works as expected on cache object"
+    assert cache.get("url3") is None, "get operation works as expected on cache object"
 
 
 def test_deletion_of_cache(tmp_cache_prefilled: TokenCache):

@@ -118,7 +118,7 @@ class IndexProxy:
         try:
             self._proxy.serve_forever()
         except KeyboardInterrupt:
-            logger.debug(f"Shutting down proxy server")
+            logger.debug("Shutting down proxy server")
             self.is_running = False
 
     def __enter__(self):
@@ -132,7 +132,7 @@ class IndexProxy:
             self._proxy.shutdown()
             self.is_running = False
         else:
-            raise ProxyLifetimeError(f"No proxy running to stop.")
+            raise ProxyLifetimeError("No proxy running to stop.")
 
     def __exit__(self, *exc):
         try:
