@@ -2,12 +2,12 @@
 
 `crane pip` allows installation of python packages from a private index secured by OAuth 2.0 authentication (provided by a crane server).
 
-## Features:
+## Features
 
 - Installing python package from OAuth 2 protected indexes (provided by crane)
 - Fall back to PyPI if (package of sub-dependencies are not found in the private index)
 - Private index takes installation priority (regardlesss of package versions in PyPI)
-- Third party client support (pip/uv/poetry/etc..). Provided the needed setup in the respecive tools is done. See below.
+- Third party client support (pip/uv/poetry/etc..). Provided the needed setup in the respecive tools is done. See [below](#third-party-client-support).
 
 ## Installation (from source)
 
@@ -21,7 +21,7 @@ Verify installation by issuing the main command:
 ```
 crane 
 ```
-You should see help something along the lines of:
+You should see help message. Something along the lines of:
 ```
 usage: crane [-h] {pip,serve,index} ...
 
@@ -36,13 +36,13 @@ commands:
     index            Manage registered crane-indexes.
 ```
 
-## Usage:
+## Usage
 
 The crane-pip package comes with a cli tool `crane` installed.
 
-### Step 1 (one-time setup): Register an crane protected index.
+### Step 1 (one-time setup): Register a crane protected index.
 
-To use a crane protected index, you should first register it with the `index` command via the `register` subcommand:
+To use a crane protected index, you should first register it with the `index register` command:
 ```
 crane index register --help
 ```
@@ -51,7 +51,7 @@ For example:
 crane index register https://private.example.com/repos/repo1 crane-pip https://id-provider.example.com/auth/realms/myrealm/protocol/openid-connect/token https://id-provider.example.com/auth/realms/myrealm/protocol/openid-connect/auth/device
 ```
 
-For a given index-url you will need to register some authentication settings of the OAuth 2 identity provider that the crane server is using. 
+For a given index-url you will need to register some authentication settings of the OAuth 2.0 identity provider that the crane server is using. 
 
 Currently the folloowing info needs to provided: 
 - client_id : The client that crane cli tool will use to communicate with the identity provider.
@@ -76,18 +76,19 @@ On first time usage, you will get promted to authenticate yourself in the browse
 The access token and refresh token are cached and you will only get promted 
 
 
-#### Limitations:
+#### Limitations
 
 Following pip flags are not supported
 - `--extra-index-url`.
 - `--proxy`.
+
 Please also do not set these flags in any pip configuration file.
 
-Specifying the private index via a pip configuration file is also not supported. You must currently provide it via the `--index-url/-i` flag.
+Specifying the private index via a pip configuration file is also not supported. You must provide it via the `--index-url/-i` flag.
 
 Note, other settings in the pip-configuration file are supported.
 
-## Third party client support:
+## Third party client support
 
 Third party tools that manage the python environment for you (like poetry/rye/...) should make use of a crane index proxy. 
 
