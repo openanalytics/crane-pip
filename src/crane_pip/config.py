@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, TYPE_CHECKING
 
+
 @dataclass
 class ServerConfig:
     "Configuration for a given crane server."
@@ -30,26 +31,28 @@ class ServerConfig:
             "device_url": self.device_url,
         }
 
+
 # Starting from 3.9 this is not needed anymore: https://stackoverflow.com/a/72436468
 if TYPE_CHECKING:
     TypedUserDict = UserDict[str, ServerConfig]
 else:
     TypedUserDict = UserDict
 
+
 class ServerConfigs(TypedUserDict):
-    """A dictionary representing the stored crane server configs on disk. Key = crane server url, 
-    
+    """A dictionary representing the stored crane server configs on disk. Key = crane server url,
+
     Setting an item also saves the config on disk.
 
-    Other modules should interact with the configs via the server_configs object 
+    Other modules should interact with the configs via the server_configs object
     and do not directly access this class! Else multiple in-memory states will get out of sync.
     """
+
     config_dir = os.path.join(Path.home(), ".local", "share", "crane", "python")
     os.makedirs(config_dir, exist_ok=True)
     server_config_file = os.path.join(config_dir, "servers.json")
-    
-    def __init__(self):
 
+    def __init__(self):
         if not os.path.isfile(self.server_config_file):
             with open(self.server_config_file, "w") as f:
                 f.write(json.dumps({}))
@@ -58,8 +61,7 @@ class ServerConfigs(TypedUserDict):
             with open(self.server_config_file, "r") as f:
                 raw_data = json.load(f)
                 self.data = {
-                    url: ServerConfig.from_json(config)
-                    for url, config in raw_data.items()
+                    url: ServerConfig.from_json(config) for url, config in raw_data.items()
                 }
 
     def __setitem__(self, key: str, item: ServerConfig) -> None:
@@ -75,7 +77,6 @@ class ServerConfigs(TypedUserDict):
         to_write = {url: tokens.to_json() for url, tokens in self.data.items()}
         with open(self.server_config_file, "w") as f:
             f.write(json.dumps(to_write))
-
 
 
 server_configs = ServerConfigs()

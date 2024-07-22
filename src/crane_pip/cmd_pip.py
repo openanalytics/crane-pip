@@ -9,10 +9,14 @@ from .proxy import ProxyAddress, IndexProxy
 logger = logging.getLogger(__name__)
 
 # Parser for the crane pip command (not to be confused with the pip command itself)
-argparser_pip = subparser.add_parser("pip", help='Any pip command, but crane indexes do get correctly authenticated.', add_help=False)
+argparser_pip = subparser.add_parser(
+    "pip", help="Any pip command, but crane indexes do get correctly authenticated.", add_help=False
+)
+
 
 class NoIndexError(Exception):
     pass
+
 
 def entrypoint_pip(args_for_pip) -> int:
     "Entry point of the 'crane pip' command."
@@ -28,6 +32,7 @@ def entrypoint_pip(args_for_pip) -> int:
         call_pip(args=new_args)
 
     return 0
+
 
 argparser_pip.set_defaults(entrypoint_pip=entrypoint_pip)
 
@@ -144,6 +149,3 @@ def call_pip(args: List[str] = []) -> None:
     except Exception as e:
         logger.critical(f"pip process failed to launch with the following error: {e}")
         raise LaunchPipError("Failed to launch pip") from e
-
-
-

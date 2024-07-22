@@ -46,9 +46,9 @@ class IndexProxy:
     Arguments:
     ----------
     index_url: str | None
-        Either the url of a registed crane protected index. Or None in which case requested will 
+        Either the url of a registed crane protected index. Or None in which case requested will
         simply be forwarded to PyPI.
-    port: int 
+    port: int
         Port number to serve the proxy under. (Default: 9999)
 
     Configuration:
@@ -68,7 +68,7 @@ class IndexProxy:
 
     Lifetime:
     ---------
-    Start and stop the server in a seperate thread using the methods start/stop. 
+    Start and stop the server in a seperate thread using the methods start/stop.
     The lifetime can also be managed via a context manager.
     """
 
@@ -78,17 +78,13 @@ class IndexProxy:
 
         self.proxy_address = ProxyAddress(host="127.0.0.1", port=port)
         self.is_running: bool = False
-        
-        
+
         # Determine the which indexes the proxy server should forward request to.
         pypi_config = IndexConfig(url="https://pypi.python.org/simple")
         if index_url:
             # Perform a (potential) interactive authentication at start up and warm up the cache.
             authenticate(crane_url=index_url)
-            indx_config = IndexConfig(
-                url=index_url,
-                registered=True
-            )
+            indx_config = IndexConfig(url=index_url, registered=True)
             indexes = (indx_config, pypi_config)
         else:
             indexes = (pypi_config,)
@@ -110,7 +106,7 @@ class IndexProxy:
             raise ProxyLifetimeError(f"Proxy is already running on {self.proxy_address.url()}")
 
     def start_here(self) -> None:
-        """Start up the proxy in this thread. 
+        """Start up the proxy in this thread.
 
         This function only returns in case of Keyboard interupt."""
         if self.is_running:
@@ -123,7 +119,7 @@ class IndexProxy:
             self._proxy.serve_forever()
         except KeyboardInterrupt:
             logger.debug(f"Shutting down proxy server")
-            self.is_running = False 
+            self.is_running = False
 
     def __enter__(self):
         self.start()
@@ -180,13 +176,12 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
         """Businuess logic for handeling the request."""
 
         headers = dict(self.headers)
-        # TODO not exactly sure what the correct Host header should be... 
-        # but for now seems we can leave it out. TODO investigate 
+        # TODO not exactly sure what the correct Host header should be...
+        # but for now seems we can leave it out. TODO investigate
         del headers["Host"]
         org_auth_header = headers["Authorization"] if "Authorization" in headers else None
-            
-        for index in self.indexes:
 
+        for index in self.indexes:
             # Set the correct Auth header. (keeping in mind that this updates accross loops)
             if index.registered:
                 headers["Authorization"] = "Bearer " + self._fetch_token(index.url)
@@ -207,22 +202,18 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             if self._is_404(resp):
                 # TODO make logger.debug info work!
                 print(f"404 for resource: {self._get_request_url(index)}")
-                continue 
+                continue
 
             print(f"{resp.status} for resource: {self._get_request_url(index)}")
             return ResponseClient(
-                status_code=resp.status,
-                headers=dict(resp.headers),
-                content=resp.data
-            ) 
-        
-        # If we get here then it means no index has the resource. Return the response of the 
+                status_code=resp.status, headers=dict(resp.headers), content=resp.data
+            )
+
+        # If we get here then it means no index has the resource. Return the response of the
         # the last call index.
         return ResponseClient(
-            status_code=resp.status,
-            headers=dict(resp.headers),
-            content=resp.data
-        ) 
+            status_code=resp.status, headers=dict(resp.headers), content=resp.data
+        )
 
     def do_request(self):
         "Top-level Wrapper for handeling all the different kind of method requests"
@@ -243,74 +234,72 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             self.send_error(502, "Bad gateway")
 
-    def _is_404(self, resp: urllib3.BaseHTTPResponse) -> bool: 
+    def _is_404(self, resp: urllib3.BaseHTTPResponse) -> bool:
         """Is the response a 404? Currently a bug in crane that turns actual 404 response in 200"""
 
-        if resp.status == 404: 
+        if resp.status == 404:
             return True
         if resp.status != 200:
-            return False 
-       
-        if 'text/html' in resp.headers['Content-Type']:
-            return 'Not found' in resp.data.decode()
-        if 'application/json' in resp.headers['Content-Type']: 
+            return False
+
+        if "text/html" in resp.headers["Content-Type"]:
+            return "Not found" in resp.data.decode()
+        if "application/json" in resp.headers["Content-Type"]:
             parsed = json.loads(resp.data)
-            if isinstance(parsed, dict) and 'code' in parsed and parsed['code'] == 404:
+            if isinstance(parsed, dict) and "code" in parsed and parsed["code"] == 404:
                 return True
         return False
 
-    def _fetch_token(self, index_url) -> str: 
+    def _fetch_token(self, index_url) -> str:
         """Fetch the access token of registerd crane servers in a thread safe manner.
-        
-        By default the cached access token will be used. But potentially the access_token 
+
+        By default the cached access token will be used. But potentially the access_token
         was expired a refresh needs to occur. The refreshed tokens need to again be saved
-        on disk. 
-        This operation needs to get coordinated between threads to ensure that not multiple 
+        on disk.
+        This operation needs to get coordinated between threads to ensure that not multiple
         threads are writing the same time on disk. Causing issues.
         """
         with self.token_access_lock:
             return get_access_token(index_url)
-         
 
     def _get_request_url(self, index: IndexConfig) -> str:
         """Get the url to forward the request to based on the index we send to."""
-        # If self.path endswith `/` then pip tried to add `/package_name/` to the 
+        # If self.path endswith `/` then pip tried to add `/package_name/` to the
         # base index url to explore the available versions of a package.
         #
-        # Note, the base index-url might already contains a path like https://pypi.org/simple/ 
+        # Note, the base index-url might already contains a path like https://pypi.org/simple/
         # and so pip requests a path `/package_name/` relative to the path path of the index url.
         #
-        # The reponse is html containing href links usually absolute path links of the website. 
-        # Eg. /simple/package_name/package_name-1.2.0.tar.gz and so the download request will 
+        # The reponse is html containing href links usually absolute path links of the website.
+        # Eg. /simple/package_name/package_name-1.2.0.tar.gz and so the download request will
         # be interms of absolute path.
-        # 
-        # But since we force pip to talk to localhost:9999 we have the situation that self.path 
-        # is one time with relative path to that of the index-url and the other time with absolute 
+        #
+        # But since we force pip to talk to localhost:9999 we have the situation that self.path
+        # is one time with relative path to that of the index-url and the other time with absolute
         # path from the index-url
-        if self.path.endswith('/'): 
+        if self.path.endswith("/"):
             url = index.url + self.path
         else:
             parsed_url = urlparse(index.url)
             url = parsed_url.scheme + "://" + parsed_url.netloc + self.path
         return url
 
-
     def _send_response_headers(self, headers: Dict, content: Union[bytes, None]):
         """Adjust and send response headers to the client
-        
+
         We have to set Content-Length if the response from the index was chunked.
 
         Arguments:
         ----------
-        headers: dict 
-            Dictionary of headers as responded back by the 
+        headers: dict
+            Dictionary of headers as responded back by the
         """
-        res = {h.lower():v for h,v in headers.items() if h.lower() != 'transfer-encoding'}
-        if 'content-length' not in res:
+        res = {h.lower(): v for h, v in headers.items() if h.lower() != "transfer-encoding"}
+        if "content-length" not in res:
             if content:
-                res['content-length'] = str(len(content))
-            else: 
-                res['content-length'] = '0'
+                res["content-length"] = str(len(content))
+            else:
+                res["content-length"] = "0"
         for k, v in res.items():
             self.send_header(k, v)
         self.end_headers()
@@ -328,5 +317,3 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         # ignore ConnectionResetError
         if sys.exc_info()[0] is not ConnectionResetError:
             super().handle_error(request, client_address)
-
-

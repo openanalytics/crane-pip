@@ -17,10 +17,12 @@ class ExpiredTokens(Exception):
 
     pass
 
+
 class UnregisterdServer(Exception):
     "Error raised when the config of unregistered crane server is requested but not present"
 
     pass
+
 
 class NoTokenCache(Exception):
     "Error raised when cache info is required but not present"
@@ -30,40 +32,45 @@ class NoTokenCache(Exception):
 
 class RequestError(Exception):
     "General request error"
+
     pass
+
 
 class FailedDeviceCodeRequest(RequestError):
     pass
 
+
 class FailedTokenRequest(RequestError):
     "Request to refresh tokens failed"
 
-    def __init__(self, msg:str, auth_pending:bool = False) -> None:
+    def __init__(self, msg: str, auth_pending: bool = False) -> None:
         self.auth_pending = auth_pending
         super().__init__(msg)
+
 
 class AuthorizationPendingFailed(RequestError):
     "An error occured when polling for the status."
 
     pass
 
+
 def _fetch_token(grant_type: str, grant_key: str, crane_config: ServerConfig) -> CraneTokens:
     """Fetch tokens based on the specified grant_type.
-   
+
     Arguments:
     ----------
     grant_type: "refresh_token" | "device_code"
-        Which grant type are we performing? 
-    grant_key: str 
+        Which grant type are we performing?
+    grant_key: str
         Refresh tokens incase grant_type == "refresh_token". Else the device_code.
     crane_config: ServerConfig
         Configs
-    
-    Response: 
+
+    Response:
     ---------
     CraneTokens
         Tokens.
-        
+
     Exceptions:
     -----------
     FailedRefreshRequest:
@@ -72,20 +79,24 @@ def _fetch_token(grant_type: str, grant_key: str, crane_config: ServerConfig) ->
         Incase the fetching failed and grant_type = "device_code".
     """
 
-    payload ={
+    payload = {
         "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         "client_id": crane_config.client_id,
     }
     if grant_type == "refresh_token":
-        payload.update({
-            "grant_type": "refresh_token",
-            "refresh_token": grant_key,
-        })
+        payload.update(
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": grant_key,
+            }
+        )
     elif grant_type == "device_code":
-        payload.update({
-            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            "device_code": grant_key,
-        })
+        payload.update(
+            {
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": grant_key,
+            }
+        )
     else:
         raise TypeError(f"Unknonw grant_type: {grant_type}.")
 
@@ -99,7 +110,7 @@ def _fetch_token(grant_type: str, grant_key: str, crane_config: ServerConfig) ->
         body=payload,
     )
 
-    try: 
+    try:
         content = response.json()
         if not isinstance(content, dict):
             raise TypeError("Response is not a json object")
@@ -109,13 +120,13 @@ def _fetch_token(grant_type: str, grant_key: str, crane_config: ServerConfig) ->
     if "error" in content:
         if content["error"] == "authorization_pending":
             raise FailedTokenRequest("Authorization not complete yet", auth_pending=True)
-        if 'error_description' in content:
+        if "error_description" in content:
             raise AuthorizationPendingFailed(
                 f"Authorization failed. Reason: {content['error_description']}"
             )
 
     now = datetime.now()
-    if content['refresh_expires_in']==0:
+    if content["refresh_expires_in"] == 0:
         refresh_token_exp_time = None
     else:
         refresh_token_exp_time = now + timedelta(seconds=content["refresh_expires_in"])
@@ -124,8 +135,9 @@ def _fetch_token(grant_type: str, grant_key: str, crane_config: ServerConfig) ->
         access_token=content["access_token"],
         refresh_token=content["refresh_token"],
         access_token_exp_time=now + timedelta(seconds=content["expires_in"]),
-        refresh_token_exp_time = refresh_token_exp_time
+        refresh_token_exp_time=refresh_token_exp_time,
     )
+
 
 def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
     """Fetch new tokens using the refresh token and return a **new copy** of tokens.
@@ -135,28 +147,22 @@ def refresh(tokens: CraneTokens, crane_config: ServerConfig) -> CraneTokens:
     if tokens.refresh_token_expired():
         raise ExpiredTokens
     return _fetch_token(
-        grant_type="refresh_token",
-        grant_key=tokens.refresh_token,
-        crane_config=crane_config
+        grant_type="refresh_token", grant_key=tokens.refresh_token, crane_config=crane_config
     )
 
 
-
 def _request_device_code(crane_config) -> Dict:
-    """Request a device code login. Reponsd with the content of the response. """
+    """Request a device code login. Reponsd with the content of the response."""
 
     ## Part 1: request the device code
     payload = urlencode({"client_id": crane_config.client_id, "scope": "openid offline_access"})
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     response = urllib3.request(
-        method="POST",
-        url=crane_config.device_url,
-        body = payload,
-        headers=headers
+        method="POST", url=crane_config.device_url, body=payload, headers=headers
     )
-    
+
     # breakpoint()
-    try: 
+    try:
         content = response.json()
         if not isinstance(content, dict):
             raise TypeError("Response is not json object")
@@ -168,9 +174,7 @@ def _request_device_code(crane_config) -> Dict:
             raise FailedDeviceCodeRequest(
                 f"Failed to request device code. Reason: {content['error_description']}"
             )
-        raise FailedDeviceCodeRequest(
-            f"Failed to request device code. Response: {content}"
-        )
+        raise FailedDeviceCodeRequest(f"Failed to request device code. Response: {content}")
 
     return content
 
@@ -188,7 +192,7 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
             "Please first register the index using the 'crane index register' command."
         )
 
-    # Part 1 request device code 
+    # Part 1 request device code
 
     content = _request_device_code(crane_config)
     if "interval" in content:
@@ -197,14 +201,14 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
         request_interval = 2
 
     ## Part 2: Call for user actions
-    try: 
-        webbrowser.open(content['verification_uri_complete'], new = 2)
+    try:
+        webbrowser.open(content["verification_uri_complete"], new=2)
         print("------------------------------")
         print("Please authenticate in the webbrowser page that just opened or")
     except Exception:
         print("------------------------------")
         print("Please authenticate:")
-         
+
     print(f"point your browser to: {content['verification_uri']}")
     print(f"and enter your user code: {content['user_code']}")
     if "verification_uri_complete" in content:
@@ -226,14 +230,15 @@ def perform_device_auth_flow(crane_url: str) -> CraneTokens:
             tokens = _fetch_token(
                 grant_type="device_code",
                 grant_key=content["device_code"],
-                crane_config=crane_config
+                crane_config=crane_config,
             )
         except FailedTokenRequest as e:
             if e.auth_pending:
-                continue 
+                continue
             raise AuthorizationPendingFailed("Fetching token failed") from e
         print("Authentication successful!")
         return tokens
+
 
 def get_access_token(crane_url: str) -> str:
     """Get access_token from cache or if possible request new ones using the cached refesh tokens.
@@ -245,15 +250,17 @@ def get_access_token(crane_url: str) -> str:
     ExpiredTokens:
         Tokens are present but both access and refresh token are already epxired.
     UnregisterdServer:
-        Incase there are no configurations found for the url which are needed if we want 
+        Incase there are no configurations found for the url which are needed if we want
         to request new tokens using the refresh token.
     """
     tokens = token_cache[crane_url]
     crane_config = server_configs[crane_url]
 
     if not server_configs:
-        raise UnregisterdServer("url = {crane_url} is not registed. "
-            "Please registed the crane server 'register' command.")
+        raise UnregisterdServer(
+            "url = {crane_url} is not registed. "
+            "Please registed the crane server 'register' command."
+        )
 
     if not tokens:
         raise NoTokenCache(
@@ -268,6 +275,7 @@ def get_access_token(crane_url: str) -> str:
         token_cache[crane_url] = new_tokens
         return new_tokens.access_token
     raise ExpiredTokens
+
 
 def authenticate(crane_url: str) -> str:
     """Authenticate with the device flow if necessary and return the access token.
