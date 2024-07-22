@@ -35,6 +35,7 @@ pexpect==4.9.0
 pickleshare==0.7.5
     # via ipython
 pip==24.0
+    # via crane-pip
 pluggy==1.5.0
     # via pytest
 prompt-toolkit==3.0.47

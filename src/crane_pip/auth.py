@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 import time
 import logging
+from typing import Dict
 import webbrowser
 from urllib.parse import urlencode
 from .config import ServerConfig, server_configs

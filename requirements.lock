@@ -9,5 +9,7 @@
 #   generate-hashes: false
 
 -e file:.
+pip==24.1.2
+    # via crane-pip
 urllib3==2.2.1
     # via crane-pip
