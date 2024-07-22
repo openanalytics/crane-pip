@@ -22,7 +22,7 @@ class CraneTokens:
     @classmethod
     def from_json(cls, cache: Dict[str, str]) -> CraneTokens:
         "Generate a TokenCache from a the read cache dictionary."
-        if "refresh_token_exp_time" in cache:
+        if cache['refresh_token_exp_time']:
             refresh_token_exp_time = datetime.fromisoformat(cache["refresh_token_exp_time"]) 
         else:
             refresh_token_exp_time = None
@@ -39,6 +39,7 @@ class CraneTokens:
             "access_token": self.access_token,
             "access_token_exp_time": self.access_token_exp_time.isoformat(),
             "refresh_token": self.refresh_token,
+            "refresh_token_exp_time": None
         }
         if self.refresh_token_exp_time:
             d["refresh_token_exp_time"] = self.refresh_token_exp_time.isoformat()
@@ -48,8 +49,8 @@ class CraneTokens:
         return self.access_token_exp_time < datetime.now()
 
     def refresh_token_expired(self) -> bool:
-        if not self.refresh_token_exp_time:
-            return True
+        if self.refresh_token_exp_time is None:
+            return False
         return self.refresh_token_exp_time < datetime.now()
 
     def expired_but_can_refresh(self) -> bool:
