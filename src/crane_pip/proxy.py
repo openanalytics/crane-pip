@@ -3,14 +3,14 @@ import sys
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
-from threading import Thread
+from threading import Lock, Thread
 from typing import NamedTuple, Tuple, Dict, Union
 from urllib.parse import urlparse
 
 import urllib3
 import logging
 
-from .auth import authenticate
+from .auth import authenticate, get_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +34,10 @@ class ProxyAddress(NamedTuple):
 
 
 class IndexConfig(NamedTuple):
-    "Index configuration."
+    "Index configuration. Registerd indexes have a token."
 
     url: str
-    access_token: Union[str, None] = None
+    registered: bool = False
 
 
 class IndexProxy:
@@ -83,9 +83,11 @@ class IndexProxy:
         # Determine the which indexes the proxy server should forward request to.
         pypi_config = IndexConfig(url="https://pypi.python.org/simple")
         if index_url:
+            # Perform a (potential) interactive authentication at start up and warm up the cache.
+            authenticate(crane_url=index_url)
             indx_config = IndexConfig(
                 url=index_url,
-                access_token=authenticate(crane_url=index_url)
+                registered=True
             )
             indexes = (indx_config, pypi_config)
         else:
@@ -94,6 +96,7 @@ class IndexProxy:
         self._indexes = indexes
         # Provide configured url/token info to handler class that each request instance would need.
         ProxyHTTPRequestHandler.indexes = indexes
+        ProxyHTTPRequestHandler.token_access_lock = Lock()
 
     def start(self) -> None:
         "Start up the proxy an seperate thread."
@@ -170,8 +173,8 @@ class ResponseClient(NamedTuple):
 class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     # Indexes to forward request to. This property is set on IndexProxy initialization.
     indexes: Tuple[IndexConfig, ...]
+    token_access_lock: Lock
     protocol_version = "HTTP/1.1"
-
 
     def _handle_request(self, method: Method) -> ResponseClient:
         """Businuess logic for handeling the request."""
@@ -180,29 +183,33 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
         # TODO not exactly sure what the correct Host header should be... 
         # but for now seems we can leave it out. TODO investigate 
         del headers["Host"]
-        
+        org_auth_header = headers["Authorization"] if "Authorization" in headers else None
+            
         for index in self.indexes:
 
-            if index.access_token:
-                headers["Authorization"] = "Bearer " + index.access_token
+            # Set the correct Auth header. (keeping in mind that this updates accross loops)
+            if index.registered:
+                headers["Authorization"] = "Bearer " + self._fetch_token(index.url)
             else:
-                if "Authorization" in headers:
-                    del headers["Authorization"] 
-            
+                if org_auth_header:
+                    headers["Authorization"] = org_auth_header
+                else:
+                    del headers["Authorization"]
 
             resp = urllib3.request(
                 method.value,
                 url=self._get_request_url(index),
-                #url=index.url+self.path,
                 decode_content=False,
                 headers=headers,
             )
-            #print(f"Url={self._get_request_url(index)} and is 404? = {self._is_404(resp)}")
 
             # If resource not found try next index.
             if self._is_404(resp):
+                # TODO make logger.debug info work!
+                print(f"404 for resource: {self._get_request_url(index)}")
                 continue 
 
+            print(f"{resp.status} for resource: {self._get_request_url(index)}")
             return ResponseClient(
                 status_code=resp.status,
                 headers=dict(resp.headers),
@@ -252,6 +259,17 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 return True
         return False
 
+    def _fetch_token(self, index_url) -> str: 
+        """Fetch the access token of registerd crane servers in a thread safe manner.
+        
+        By default the cached access token will be used. But potentially the access_token 
+        was expired a refresh needs to occur. The refreshed tokens need to again be saved
+        on disk. 
+        This operation needs to get coordinated between threads to ensure that not multiple 
+        threads are writing the same time on disk. Causing issues.
+        """
+        with self.token_access_lock:
+            return get_access_token(index_url)
          
 
     def _get_request_url(self, index: IndexConfig) -> str:
