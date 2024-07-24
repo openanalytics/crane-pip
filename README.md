@@ -13,7 +13,7 @@
 
 ### temporarily install instructions:
 
-Install the .tar.gz from: https://rdepot.dev.openanalytics.eu/packages/Python/20 
+Download the latest .tar.gz from: https://repos.dev.openanalytics.eu/repo/python-public/crane-pip/
 Install the `crane-pip` in its own environment on your system using [pipx](https://github.com/pypa/pipx).
 
 ```
