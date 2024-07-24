@@ -11,10 +11,13 @@
 
 ## Installation (from source)
 
+### temporarily install instructions:
+
+Install the .tar.gz from: https://rdepot.dev.openanalytics.eu/packages/Python/20 
 Install the `crane-pip` in its own environment on your system using [pipx](https://github.com/pypa/pipx).
 
 ```
-pipx install --index-url https://repos.dev.openanalytics.eu/repo/python-public crane-pip
+pipx install crane-pip-x.y.z.tar.gz
 ```
 
 Verify installation by issuing the main command:
@@ -31,9 +34,9 @@ optional arguments:
 commands:
   {pip,serve,index}
     pip              Any pip command, but crane indexes do get correctly authenticated.
+    index            Manage registered crane-indexes.
     serve            Serve a local index proxy performing authentication for the crane protected
                      index.
-    index            Manage registered crane-indexes.
 ```
 
 ## Usage
