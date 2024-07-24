@@ -14,7 +14,7 @@
 Install the `crane-pip` in its own environment on your system using [pipx](https://github.com/pypa/pipx).
 
 ```
-pipx install crane-pip
+pipx install --index-url https://repos.dev.openanalytics.eu/repo/python-public crane-pip
 ```
 
 Verify installation by issuing the main command:
