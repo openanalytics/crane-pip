@@ -1,6 +1,6 @@
 [project]
 name = "crane-pip"
-version = "0.1.0"
+version = "0.1.1"
 description = "cli to download python package from an index (like rdepot) behind a crane server."
 authors = [
     { name = "Lennart Tuijnder", email = "lennart.tuijnder@openanalytics.eu" },
