@@ -1,6 +1,7 @@
 # Crane-pip
 
-`crane pip` allows installation of python packages from a private index secured by OAuth 2.0 authentication (provided by a crane server).
+`crane pip` allows installation of python packages from a private index secured by OAuth 2.0
+authentication (provided by a [Crane](https://craneserver.net/) server).
 
 ## Features
 
@@ -107,4 +108,4 @@ Now point your the tool that manages your environment towards the proxy index. T
 
 The authentication prompt that requires interaction with the broweser is only requested at start-up of the server. The server will use the refresh token to update the access token if you interact with it. But if the refresh token expires or authentication rights have been revoked by the identity provider, then a restart of the server is required.
 
-
+**(c) Copyright Open Analytics NV, 2024-2025 - Apache License 2.0**
